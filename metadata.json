@@ -1,0 +1,6 @@
+{
+  "name": "VerbaMind AI Pro",
+  "description": "Application Web de traduction contextuelle en temps réel, de réorganisation grammaticale et de reconnaissance visuelle AR Live Camera dans plus de 200 langues.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
