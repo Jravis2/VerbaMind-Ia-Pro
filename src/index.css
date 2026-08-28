@@ -3,61 +3,141 @@
 @layer base {
   :root {
     --verbamind-accent: #6366f1;
+    --verbamind-accent-hover: #4f46e5;
+    --verbamind-accent-glow: rgba(99, 102, 241, 0.35);
+    --verbamind-accent-subtle: rgba(99, 102, 241, 0.12);
+
+    /* Default Theme: cyber-midnight */
+    --app-bg: #030712;
+    --app-text: #f3f4f6;
+    --app-text-muted: #94a3b8;
+    --card-bg: #0b1329;
+    --card-bg-subtle: #0f1c3f;
+    --card-border: #1e293b;
+    --header-bg: #060e24;
+    --input-bg: #060b19;
+    --glass-blur: blur(12px);
+    --border-w: 1px;
   }
 
   body {
+    background-color: var(--app-bg);
+    color: var(--app-text);
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
   }
 
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
 
-  /* Themes */
-  html[data-theme="cyber-midnight"] body {
-    background-color: #030712;
-    color: #f3f4f6;
+  /* 1. Cyber Midnight */
+  html[data-theme="cyber-midnight"] {
+    --app-bg: #030712;
+    --app-text: #f3f4f6;
+    --app-text-muted: #94a3b8;
+    --card-bg: #081126;
+    --card-bg-subtle: #0d1a3a;
+    --card-border: #1e293b;
+    --header-bg: #050b1d;
+    --input-bg: #040817;
   }
 
-  html[data-theme="deep-sapphire"] body {
-    background-color: #040d21;
-    color: #f1f5f9;
+  /* 2. Deep Sapphire */
+  html[data-theme="deep-sapphire"] {
+    --app-bg: #040d21;
+    --app-text: #f1f5f9;
+    --app-text-muted: #93c5fd;
+    --card-bg: #08193f;
+    --card-bg-subtle: #0c265f;
+    --card-border: #1e3a8a;
+    --header-bg: #05122f;
+    --input-bg: #030919;
   }
 
-  html[data-theme="obsidian-gold"] body {
-    background-color: #0d0b06;
-    color: #fef3c7;
+  /* 3. Obsidian & Gold */
+  html[data-theme="obsidian-gold"] {
+    --app-bg: #0d0b06;
+    --app-text: #fef3c7;
+    --app-text-muted: #d97706;
+    --card-bg: #1c160a;
+    --card-bg-subtle: #29200f;
+    --card-border: #78350f;
+    --header-bg: #140f07;
+    --input-bg: #0a0804;
   }
 
-  html[data-theme="emerald-neon"] body {
-    background-color: #03140c;
-    color: #ecfdf5;
+  /* 4. Emerald Neon */
+  html[data-theme="emerald-neon"] {
+    --app-bg: #02120a;
+    --app-text: #ecfdf5;
+    --app-text-muted: #6ee7b7;
+    --card-bg: #062316;
+    --card-bg-subtle: #0a3622;
+    --card-border: #064e3b;
+    --header-bg: #03170e;
+    --input-bg: #020d07;
   }
 
-  html[data-theme="crimson-ruby"] body {
-    background-color: #140307;
-    color: #ffe4e6;
+  /* 5. Crimson Ruby */
+  html[data-theme="crimson-ruby"] {
+    --app-bg: #140307;
+    --app-text: #ffe4e6;
+    --app-text-muted: #fda4af;
+    --card-bg: #27060f;
+    --card-bg-subtle: #3d0a17;
+    --card-border: #881337;
+    --header-bg: #1b040a;
+    --input-bg: #0f0205;
   }
 
-  html[data-theme="amethyst-purple"] body {
-    background-color: #0e041c;
-    color: #f3e8ff;
+  /* 6. Amethyst Purple */
+  html[data-theme="amethyst-purple"] {
+    --app-bg: #0e041c;
+    --app-text: #f3e8ff;
+    --app-text-muted: #d8b4fe;
+    --card-bg: #1a0833;
+    --card-bg-subtle: #290d4f;
+    --card-border: #581c87;
+    --header-bg: #130526;
+    --input-bg: #090212;
   }
 
-  html[data-theme="clean-light"] body {
-    background-color: #f8fafc;
-    color: #0f172a;
+  /* 7. Clean Light (High-Readability Mode) */
+  html[data-theme="clean-light"] {
+    --app-bg: #f1f5f9;
+    --app-text: #0f172a;
+    --app-text-muted: #475569;
+    --card-bg: #ffffff;
+    --card-bg-subtle: #f8fafc;
+    --card-border: #cbd5e1;
+    --header-bg: #ffffff;
+    --input-bg: #f8fafc;
   }
 
-  html[data-theme="sunset-amber"] body {
-    background-color: #1a0b02;
-    color: #ffedd5;
+  /* 8. Sunset Amber */
+  html[data-theme="sunset-amber"] {
+    --app-bg: #170902;
+    --app-text: #ffedd5;
+    --app-text-muted: #fdba74;
+    --card-bg: #2b1104;
+    --card-bg-subtle: #3f1906;
+    --card-border: #7c2d12;
+    --header-bg: #1f0c03;
+    --input-bg: #110601;
   }
 
-  html[data-theme="nordic-frost"] body {
-    background-color: #06111e;
-    color: #e0f2fe;
+  /* 9. Nordic Frost */
+  html[data-theme="nordic-frost"] {
+    --app-bg: #05101c;
+    --app-text: #e0f2fe;
+    --app-text-muted: #7dd3fc;
+    --card-bg: #0a1f36;
+    --card-bg-subtle: #0f2e50;
+    --card-border: #0369a1;
+    --header-bg: #071626;
+    --input-bg: #030a13;
   }
 
   /* Font Scales */
@@ -76,7 +156,35 @@
 
   /* High Contrast */
   html[data-contrast="high"] {
-    filter: contrast(1.15);
+    filter: contrast(1.2);
+  }
+  html[data-contrast="high"] {
+    --card-border: #94a3b8;
+  }
+
+  /* Border Widths */
+  html[data-border-width="thin"] {
+    --border-w: 1px;
+  }
+  html[data-border-width="normal"] {
+    --border-w: 1.5px;
+  }
+  html[data-border-width="thick"] {
+    --border-w: 2.5px;
+  }
+
+  /* Glassmorphism Levels */
+  html[data-glassmorphism="none"] {
+    --glass-blur: none;
+  }
+  html[data-glassmorphism="subtle"] {
+    --glass-blur: blur(6px);
+  }
+  html[data-glassmorphism="medium"] {
+    --glass-blur: blur(14px);
+  }
+  html[data-glassmorphism="high"] {
+    --glass-blur: blur(24px);
   }
 
   /* Reduced Motion */
@@ -86,12 +194,72 @@
     transition-duration: 0.001ms !important;
   }
 
-  /* Dyslexic Friendly */
+  /* Dyslexic Friendly Font */
   html[data-dyslexic="true"] body {
     font-family: 'Comic Sans MS', 'Trebuchet MS', sans-serif !important;
     letter-spacing: 0.05em;
-    word-spacing: 0.1em;
+    word-spacing: 0.12em;
+    line-height: 1.8 !important;
   }
+}
+
+/* Custom Theme Utility Classes */
+.theme-bg-app {
+  background-color: var(--app-bg);
+}
+
+.theme-card {
+  background-color: var(--card-bg);
+  border-color: var(--card-border);
+  border-width: var(--border-w);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.theme-card-subtle {
+  background-color: var(--card-bg-subtle);
+  border-color: var(--card-border);
+  border-width: var(--border-w);
+}
+
+.theme-input {
+  background-color: var(--input-bg);
+  border-color: var(--card-border);
+  color: var(--app-text);
+  border-width: var(--border-w);
+}
+
+.theme-header {
+  background-color: var(--header-bg);
+  border-color: var(--card-border);
+  border-bottom-width: var(--border-w);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.theme-text-primary {
+  color: var(--app-text);
+}
+
+.theme-text-muted {
+  color: var(--app-text-muted);
+}
+
+.theme-accent-btn {
+  background-color: var(--verbamind-accent);
+  color: #ffffff;
+  box-shadow: 0 4px 14px var(--verbamind-accent-glow);
+  transition: all 0.2s ease;
+}
+.theme-accent-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.theme-accent-badge {
+  background-color: var(--verbamind-accent-subtle);
+  color: var(--verbamind-accent);
+  border-color: var(--verbamind-accent);
 }
 
 @keyframes fadeIn {
@@ -131,14 +299,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #060b19;
+  background: var(--input-bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--card-border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--verbamind-accent);
 }

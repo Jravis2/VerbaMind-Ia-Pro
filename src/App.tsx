@@ -166,6 +166,7 @@ export default function App() {
             initialSourceText={prefilledText}
             initialTone={prefilledTone}
             isOnline={isOnline}
+            settings={settings}
           />
         )}
 
@@ -173,6 +174,7 @@ export default function App() {
           <ARLiveCameraView
             onSaveHistory={handleSaveHistory}
             isOnline={isOnline}
+            settings={settings}
           />
         )}
 
@@ -180,6 +182,7 @@ export default function App() {
           <VoiceTranslatorView
             onSaveHistory={handleSaveHistory}
             isOnline={isOnline}
+            settings={settings}
           />
         )}
 
@@ -192,19 +195,19 @@ export default function App() {
       </main>
 
       {/* Technical Footer */}
-      <footer className="relative z-10 border-t border-slate-800/80 bg-[#060d21]/90 backdrop-blur-md py-6 px-4 sm:px-6 lg:px-8 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+      <footer className="relative z-10 border-t theme-card-subtle py-6 px-4 sm:px-6 lg:px-8 mt-auto">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs theme-text-muted">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-lg bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+            <div className="w-6 h-6 rounded-lg theme-card border flex items-center justify-center text-indigo-400">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
             <div>
-              <span className="font-bold text-white">{t.appName} Pro</span>
-              <span className="text-slate-500 ml-2">{t.appSubtitle}</span>
+              <span className="font-bold theme-text-primary">{t.appName} Pro</span>
+              <span className="theme-text-muted ml-2">{t.appSubtitle}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] theme-text-muted">
             <span className="flex items-center gap-1">
               <Zap className="w-3 h-3 text-indigo-400" />
               <span>{settings.debounceDelay}ms Debounce</span>
@@ -221,7 +224,7 @@ export default function App() {
             </span>
           </div>
 
-          <div className="text-slate-400 text-right">
+          <div className="theme-text-muted text-right">
             <span>&copy; {new Date().getFullYear()} {t.appName} Pro.</span>
           </div>
         </div>

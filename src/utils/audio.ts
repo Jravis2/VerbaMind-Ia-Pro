@@ -97,7 +97,11 @@ export function stopBrowserSpeech(): void {
   }
 }
 
-export function speakTextWithBrowser(text: string, langCode = 'fr'): Promise<void> {
+export function speakTextWithBrowser(
+  text: string,
+  langCode = 'fr',
+  options?: { rate?: number; pitch?: number; gender?: 'auto' | 'female' | 'male' }
+): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       console.warn('SpeechSynthesis is not supported in this browser environment.');
@@ -116,27 +120,50 @@ export function speakTextWithBrowser(text: string, langCode = 'fr'): Promise<voi
     // Normalize language tag (e.g., 'en' -> 'en-US', 'fr' -> 'fr-FR', 'es' -> 'es-ES')
     const primaryLang = langCode.split('-')[0].toLowerCase();
     utterance.lang = langCode;
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
+    utterance.rate = options?.rate !== undefined ? options.rate : 1.0;
+    utterance.pitch = options?.pitch !== undefined ? options.pitch : 1.0;
 
     const findVoiceAndSpeak = () => {
       const voices = window.speechSynthesis.getVoices();
       if (voices && voices.length > 0) {
-        // Priority 1: Exact code match (e.g., 'es-ES' or 'en-US')
-        let matchedVoice = voices.find((v) => v.lang.toLowerCase() === langCode.toLowerCase());
-        
-        // Priority 2: Matching primary language prefix (e.g., 'es' matches 'es-MX' or 'es-ES')
-        if (!matchedVoice) {
-          matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(primaryLang));
+        let matchingVoices = voices.filter(
+          (v) =>
+            v.lang.toLowerCase() === langCode.toLowerCase() ||
+            v.lang.toLowerCase().startsWith(primaryLang) ||
+            v.lang.toLowerCase().includes(primaryLang)
+        );
+
+        if (matchingVoices.length === 0) {
+          matchingVoices = voices;
         }
 
-        // Priority 3: Contains language code
-        if (!matchedVoice) {
-          matchedVoice = voices.find((v) => v.lang.toLowerCase().includes(primaryLang));
+        // Apply gender preference if specified
+        let selectedVoice = matchingVoices[0];
+        if (options?.gender === 'female') {
+          const femaleMatch = matchingVoices.find(
+            (v) =>
+              v.name.toLowerCase().includes('female') ||
+              v.name.toLowerCase().includes('woman') ||
+              v.name.toLowerCase().includes('zira') ||
+              v.name.toLowerCase().includes('hortense') ||
+              v.name.toLowerCase().includes('helena') ||
+              v.name.toLowerCase().includes('samantha')
+          );
+          if (femaleMatch) selectedVoice = femaleMatch;
+        } else if (options?.gender === 'male') {
+          const maleMatch = matchingVoices.find(
+            (v) =>
+              v.name.toLowerCase().includes('male') ||
+              v.name.toLowerCase().includes('man') ||
+              v.name.toLowerCase().includes('david') ||
+              v.name.toLowerCase().includes('paul') ||
+              v.name.toLowerCase().includes('george')
+          );
+          if (maleMatch) selectedVoice = maleMatch;
         }
 
-        if (matchedVoice) {
-          utterance.voice = matchedVoice;
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
         }
       }
 
@@ -153,6 +180,7 @@ export function speakTextWithBrowser(text: string, langCode = 'fr'): Promise<voi
         resolve();
       }
     };
+
 
     // If voices are already loaded
     if (window.speechSynthesis.getVoices().length > 0) {

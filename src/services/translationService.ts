@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { getClientGemini } from './clientGemini';
 import { ToneStyle, TranslationResponse, SyntaxAnalysisResponse, OcrTranslationResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
@@ -43,6 +43,15 @@ function applyToneStyle(text: string, tone: ToneStyle, targetLang: string): stri
   return text;
 }
 
+export interface TranslationServiceOptions {
+  aiModel?: 'gemini-2.5-flash' | 'gemini-1.5-pro' | 'gemini-2.5-flash-lite';
+  temperature?: number;
+  thinkingMode?: 'auto' | 'off' | 'deep';
+  grammarStrictness?: 'natural' | 'strict' | 'creative';
+  smartRestructuring?: boolean;
+  autoLanguageDetection?: 'standard' | 'deep-learning';
+}
+
 /**
  * Perform Translation with multi-tier fallback:
  * 1. Backend Express server (/api/translate) if available
@@ -57,6 +66,7 @@ export async function executeTranslation({
   tone = 'natural',
   withPhonetic = false,
   useCase = 'general',
+  options,
   signal,
 }: {
   text: string;
@@ -65,6 +75,7 @@ export async function executeTranslation({
   tone?: ToneStyle;
   withPhonetic?: boolean;
   useCase?: string;
+  options?: TranslationServiceOptions;
   signal?: AbortSignal;
 }): Promise<TranslationResponse> {
   const startTime = Date.now();
@@ -77,6 +88,11 @@ export async function executeTranslation({
       latencyMs: 0,
     };
   }
+
+  const selectedModel = options?.aiModel || 'gemini-2.5-flash';
+  const temperature = options?.temperature !== undefined ? options.temperature : 0.3;
+  const grammarStrictness = options?.grammarStrictness || 'natural';
+  const smartRestructure = options?.smartRestructuring !== false;
 
   // Tier 1: Try local backend /api/translate
   try {
@@ -92,6 +108,9 @@ export async function executeTranslation({
           tone,
           withPhonetic,
           useCase,
+          model: selectedModel,
+          temperature,
+          grammarStrictness,
         }),
       },
       1,
@@ -129,31 +148,53 @@ export async function executeTranslation({
         simplified: 'Clear, concise sentences and accessible vocabulary.',
       }[tone] || 'Natural';
 
-      const prompt = `You are VerbaMind AI Pro. Translate and grammatically restructure the following text into target language code "${targetLang}".
+      const strictnessInstruction =
+        grammarStrictness === 'strict'
+          ? 'Apply strict academic grammar rules and absolute orthographic rigor.'
+          : grammarStrictness === 'creative'
+          ? 'Emphasize stylistic beauty, poetic flow, and engaging vocabulary.'
+          : 'Maintain natural, modern idiomatic expressions.';
+
+      const restructureInstruction = smartRestructure
+        ? 'Restructure clauses logically for maximum clarity and readability.'
+        : 'Preserve literal sentence structure.';
+
+      const prompt = `You are VerbaMind AI Pro. Translate and grammatically refine the following text into target language code "${targetLang}".
 Source language setting: "${sourceLang}" (detect automatically if "auto").
 Tone requested: ${tonePrompt}
+Grammar mode: ${strictnessInstruction}
+Structure rule: ${restructureInstruction}
 Context: ${useCase}
 
 Source Text:
 """${cleanText}"""`;
 
-      const response = await clientGemini.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              translatedText: { type: Type.STRING },
-              detectedSourceLang: { type: Type.STRING },
-              detectedSourceLangName: { type: Type.STRING },
-              phonetic: { type: Type.STRING },
-              detectedGrammarIssues: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['translatedText', 'detectedSourceLang'],
+      const genConfig: any = {
+        temperature,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            translatedText: { type: Type.STRING },
+            detectedSourceLang: { type: Type.STRING },
+            detectedSourceLangName: { type: Type.STRING },
+            phonetic: { type: Type.STRING },
+            detectedGrammarIssues: { type: Type.ARRAY, items: { type: Type.STRING } },
           },
+          required: ['translatedText', 'detectedSourceLang'],
         },
+      };
+
+      if (options?.thinkingMode === 'deep') {
+        genConfig.thinkingConfig = { thinkingBudget: 2048 };
+      } else if (options?.thinkingMode === 'off') {
+        genConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
+      const response = await clientGemini.models.generateContent({
+        model: selectedModel,
+        contents: prompt,
+        config: genConfig,
       });
 
       if (response && response.text) {

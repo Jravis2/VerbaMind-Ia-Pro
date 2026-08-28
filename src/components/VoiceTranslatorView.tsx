@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Mic,
   MicOff,
@@ -8,7 +8,6 @@ import {
   Layers,
   Copy,
   Check,
-  RefreshCw,
   Radio,
 } from 'lucide-react';
 import { ToneStyle, HistoryItem } from '../types';
@@ -23,15 +22,19 @@ import {
   fetchWithExponentialBackoff,
 } from '../utils/audio';
 import { executeTranslation } from '../services/translationService';
+import { AppSettings, triggerHapticFeedback, playUiChime } from '../utils/appSettings';
+import { I18N_TRANSLATIONS } from '../data/i18n';
 
 interface VoiceTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
   isOnline?: boolean;
+  settings?: AppSettings;
 }
 
 export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
   onSaveHistory,
   isOnline = true,
+  settings,
 }) => {
   const [sourceLang, setSourceLang] = useState('fr');
   const [targetLang, setTargetLang] = useState('en');
@@ -56,6 +59,8 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  const t = I18N_TRANSLATIONS[settings?.appLanguage || 'fr'] || I18N_TRANSLATIONS.fr;
+
   const sourceLangObj =
     LANGUAGES_DATABASE.find((l) => l.code === sourceLang) || {
       code: sourceLang,
@@ -78,7 +83,7 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
   const translateAndSpeak = async (textToTranslate: string, sLang = sourceLang, tLang = targetLang) => {
     if (!textToTranslate.trim()) return;
     if (!isOnline) {
-      setErrorMessage('⚠️ Mode hors ligne : Une connexion Internet est requise pour la traduction vocale avec Gemini AI.');
+      setErrorMessage('⚠️ Mode hors ligne : Une connexion Internet est requise pour la traduction vocale.');
       return;
     }
     setErrorMessage(null);
@@ -90,6 +95,13 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
         targetLang: tLang,
         tone,
         withPhonetic: false,
+        options: {
+          aiModel: settings?.aiModel,
+          temperature: settings?.temperature,
+          thinkingMode: settings?.thinkingMode,
+          grammarStrictness: settings?.grammarStrictness,
+          smartRestructuring: settings?.smartRestructuring,
+        },
       });
 
       const translated = data.translatedText || '';
@@ -105,6 +117,16 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
         },
       ]);
 
+      if (settings?.autoCopyOnFinish && translated) {
+        try {
+          navigator.clipboard.writeText(translated);
+        } catch (e) {}
+      }
+
+      if (settings?.uiSoundEffects) {
+        playUiChime('success');
+      }
+
       onSaveHistory({
         sourceText: textToTranslate,
         translatedText: translated,
@@ -114,8 +136,10 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
         mode: 'voice',
       });
 
-      // Auto play target translation
-      handlePlayTts(translated, tLang);
+      // Auto play target translation if setting enabled (default true)
+      if (settings?.autoPlayTts !== false) {
+        handlePlayTts(translated, tLang);
+      }
     } catch (err) {
       console.error('Voice translation error:', err);
     } finally {
@@ -127,20 +151,34 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
   const handlePlayTts = async (text: string, langCode: string) => {
     if (!text) return;
     setIsPlayingAudio(true);
+    const voiceOpts = {
+      rate: settings?.voiceSpeed ?? 1.0,
+      pitch: settings?.voicePitch ?? 1.0,
+      gender: settings?.voiceGender ?? 'auto',
+    };
     try {
-      const res = await fetchWithExponentialBackoff('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'Kore' }),
-      }, 1, 500);
-      const data = await res.json();
-      if (data.audioBase64) {
-        await playRawPcmAudio(data.audioBase64, data.sampleRate || 24000);
+      const res = await fetchWithExponentialBackoff(
+        '/api/tts',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: 'Kore' }),
+        },
+        1,
+        500
+      );
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.audioBase64) {
+          await playRawPcmAudio(data.audioBase64, data.sampleRate || 24000);
+        } else {
+          await speakTextWithBrowser(text, langCode, voiceOpts);
+        }
       } else {
-        await speakTextWithBrowser(text, langCode);
+        await speakTextWithBrowser(text, langCode, voiceOpts);
       }
     } catch {
-      await speakTextWithBrowser(text, langCode);
+      await speakTextWithBrowser(text, langCode, voiceOpts);
     } finally {
       setIsPlayingAudio(false);
     }
@@ -148,6 +186,8 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
 
   // Toggle Speech Recognition
   const toggleRecording = async () => {
+    if (settings?.hapticFeedback) triggerHapticFeedback(20);
+
     if (isRecording) {
       // Stop
       if (recognizerRef.current) {
@@ -174,14 +214,20 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
           }
         );
         if (recognizer) {
+          recognizer.continuous = Boolean(settings?.speechContinuous);
           recognizerRef.current = recognizer;
           recognizer.start();
           setIsRecording(true);
         }
       } else {
-        // Fallback to MediaRecorder + Gemini 3.5 Transcribe
+        // Fallback to MediaRecorder
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              noiseSuppression: settings?.noiseSuppression !== false,
+              echoCancellation: true,
+            },
+          });
           const mediaRecorder = new MediaRecorder(stream);
           audioChunksRef.current = [];
 
@@ -198,16 +244,17 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
                 const res = await fetch('/api/transcribe', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ audio: base64Audio, mimeType: 'audio/webm' }),
+                  body: JSON.stringify({ audioBase64: base64Audio, mimeType: 'audio/webm' }),
                 });
-                const data = await res.json();
-                const text = data.transcription || '';
-                setTranscript(text);
-                if (text) {
-                  translateAndSpeak(text);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.transcript) {
+                    setTranscript(data.transcript);
+                    translateAndSpeak(data.transcript);
+                  }
                 }
               } catch (e) {
-                console.error('Transcription error:', e);
+                console.error('Transcribe error:', e);
               }
             };
             reader.readAsDataURL(audioBlob);
@@ -217,177 +264,221 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
           mediaRecorder.start();
           setIsRecording(true);
         } catch (e) {
-          setErrorMessage("Accès microphone non autorisé ou non supporté par le navigateur.");
+          console.error('Mic access error:', e);
+          setErrorMessage("Impossible d'accéder au microphone. Veuillez autoriser l'accès.");
         }
       }
     }
   };
 
-  const handleSwapLanguages = () => {
+  // Swap Languages
+  const handleSwap = () => {
+    if (settings?.hapticFeedback) triggerHapticFeedback(10);
     const temp = sourceLang;
     setSourceLang(targetLang);
     setTargetLang(temp);
+    setTranscript('');
+    setTranslatedVoiceText('');
   };
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopySuccess(true);
+    if (settings?.hapticFeedback) triggerHapticFeedback(10);
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in">
-      {/* Tone selection */}
-      <ToneSelector currentTone={tone} onChangeTone={(t) => setTone(t)} />
+    <div className="w-full max-w-7xl mx-auto space-y-5 animate-fade-in">
+      {/* Top Controls Toolbar */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="flex-1">
+          <ToneSelector currentTone={tone} onChangeTone={(t) => setTone(t)} />
+        </div>
 
-      {/* Error banner if any */}
-      {errorMessage && (
-        <div className="p-3.5 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{errorMessage}</span>
-          </div>
+        {/* Language Pair Selector */}
+        <div className="flex items-center gap-2 theme-card p-1.5 rounded-2xl">
           <button
-            onClick={() => setErrorMessage(null)}
-            className="p-1 rounded-lg hover:bg-rose-900/60 text-rose-300 hover:text-white"
+            id="btn-voice-source-lang"
+            onClick={() => setIsSourceModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl theme-card-subtle theme-text-primary text-xs font-bold transition-all"
           >
+            <span>{sourceLangObj.flag}</span>
+            <span>{sourceLangObj.name}</span>
+          </button>
+
+          <button
+            id="btn-swap-voice-langs"
+            onClick={handleSwap}
+            title="Inverser les langues"
+            className="p-2 rounded-xl theme-card-subtle theme-text-muted hover:theme-text-primary transition-all active:rotate-180 duration-200"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            id="btn-voice-target-lang"
+            onClick={() => setIsTargetModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl theme-card-subtle theme-text-primary text-xs font-bold transition-all"
+          >
+            <span>{targetLangObj.flag}</span>
+            <span>{targetLangObj.name}</span>
+          </button>
+        </div>
+      </div>
+
+      {errorMessage && (
+        <div className="p-4 rounded-xl bg-red-950/40 border border-red-500/40 text-red-200 text-xs flex items-center justify-between">
+          <span>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="text-red-400 font-bold ml-4">
             ✕
           </button>
         </div>
       )}
 
-      {/* Language Header bar */}
-      <div className="flex items-center justify-between p-4 bg-[#0c152e] border border-indigo-500/30 rounded-2xl shadow-xl">
-        <button
-          id="btn-voice-source-lang"
-          onClick={() => setIsSourceModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#14234b] border border-indigo-500/30 text-white hover:bg-indigo-600/30 text-sm font-semibold transition-all"
-        >
-          <span className="text-xl leading-none">{sourceLangObj.flag || '🌐'}</span>
-          <span>{sourceLangObj.name}</span>
-          <span className="text-xs text-indigo-300">▼</span>
-        </button>
+      {/* Main Microphone Action Card */}
+      <div className="theme-card rounded-2xl p-8 sm:p-12 shadow-2xl flex flex-col items-center justify-center text-center space-y-6 relative overflow-hidden">
+        {/* Pulsing Aura Rings */}
+        <div className="relative">
+          {isRecording && (
+            <>
+              <span className="animate-ping absolute -inset-4 rounded-full bg-red-500/40 opacity-75"></span>
+              <span className="animate-pulse absolute -inset-8 rounded-full bg-red-500/20"></span>
+            </>
+          )}
 
-        <button
-          id="btn-voice-swap-langs"
-          onClick={handleSwapLanguages}
-          className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-indigo-600/40 border border-slate-700 transition-all"
-        >
-          <ArrowRightLeft className="w-4 h-4" />
-        </button>
-
-        <button
-          id="btn-voice-target-lang"
-          onClick={() => setIsTargetModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#172856] border border-indigo-400/40 text-white hover:bg-indigo-600/40 text-sm font-semibold transition-all"
-        >
-          <span className="text-xl leading-none">{targetLangObj.flag || '🌐'}</span>
-          <span>{targetLangObj.name}</span>
-          <span className="text-xs text-indigo-300">▼</span>
-        </button>
-      </div>
-
-      {/* Interactive Microphone Central Stage */}
-      <div className="flex flex-col items-center justify-center p-10 bg-gradient-to-b from-[#0e193c] to-[#070d1e] border border-indigo-500/20 rounded-3xl shadow-2xl relative overflow-hidden">
-        {/* Glowing Background Circles */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div
-            className={`w-64 h-64 rounded-full bg-indigo-600/10 filter blur-3xl transition-all duration-500 ${
-              isRecording ? 'scale-150 bg-indigo-500/20' : 'scale-100'
+          <button
+            id="btn-toggle-voice-record"
+            onClick={toggleRecording}
+            className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center text-white shadow-2xl transition-all duration-300 transform active:scale-95 ${
+              isRecording
+                ? 'bg-gradient-to-tr from-red-600 to-rose-500 shadow-red-600/50 scale-105'
+                : 'theme-accent-btn shadow-lg'
             }`}
-          ></div>
+          >
+            {isRecording ? (
+              <>
+                <MicOff className="w-10 h-10 animate-pulse" />
+                <span className="text-[11px] font-extrabold uppercase mt-1 tracking-wider">Arrêter</span>
+              </>
+            ) : (
+              <>
+                <Mic className="w-10 h-10" />
+                <span className="text-[11px] font-extrabold uppercase mt-1 tracking-wider">Parler</span>
+              </>
+            )}
+          </button>
         </div>
 
-        {/* Status Pills */}
-        <div className="mb-6 flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#14234d]/80 border border-indigo-500/30 text-xs font-semibold text-indigo-200">
-          <Radio className={`w-3.5 h-3.5 ${isRecording ? 'text-red-400 animate-pulse' : 'text-indigo-400'}`} />
-          <span>
+        {/* Live Audio Status */}
+        <div className="space-y-2 max-w-md">
+          <div className="flex items-center justify-center gap-2">
+            <Radio
+              className={`w-4 h-4 ${
+                isRecording ? 'text-red-400 animate-pulse' : isTranslating ? 'text-indigo-400 animate-spin' : 'theme-text-muted'
+              }`}
+            />
+            <h3 className="text-sm font-bold theme-text-primary uppercase tracking-wider">
+              {isRecording
+                ? 'Écoute active en cours...'
+                : isTranslating
+                ? 'Traduction par Gemini AI...'
+                : 'Appuyez pour dicter une phrase'}
+            </h3>
+          </div>
+
+          <p className="text-xs theme-text-muted">
             {isRecording
-              ? 'Écoute active en cours... Parlez naturellement'
-              : isTranslating
-              ? 'Traduction & Synthèse vocale...'
-              : 'Appuyez sur le micro pour parler'}
-          </span>
+              ? `Langue source : ${sourceLangObj.name} • Parlez naturellement`
+              : 'La traduction sera instantanément lue à voix haute avec la voix IA naturelle.'}
+          </p>
         </div>
 
-        {/* Main Microphone Action Button */}
-        <button
-          id="btn-voice-mic-main"
-          onClick={toggleRecording}
-          className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-95 shadow-2xl ${
-            isRecording
-              ? 'bg-gradient-to-tr from-red-600 to-rose-500 text-white shadow-red-500/50 ring-8 ring-red-500/20 animate-pulse'
-              : 'bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-indigo-600/50 hover:shadow-indigo-500/70 hover:scale-105'
-          }`}
-        >
-          {isRecording ? <MicOff className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
-        </button>
-
-        {/* Live Transcript / Translation Preview */}
-        <div className="w-full max-w-2xl mt-8 space-y-4">
-          {transcript && (
-            <div className="p-4 rounded-xl bg-[#0b142d] border border-slate-700/80 text-sm text-slate-200 animate-fade-in">
-              <div className="text-xs text-slate-400 font-semibold mb-1">Transcription ({sourceLangObj.name}) :</div>
-              <p className="font-medium text-white">{transcript}</p>
+        {/* Realtime Transcript & Output Cards */}
+        {(transcript || translatedVoiceText) && (
+          <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4 text-left pt-4 animate-fade-in">
+            {/* User transcript */}
+            <div className="p-4 rounded-xl theme-card-subtle border space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold theme-text-muted">
+                <span>{sourceLangObj.name} (Original)</span>
+                <span className="text-base">{sourceLangObj.flag}</span>
+              </div>
+              <p className="text-sm theme-text-primary leading-relaxed select-text">
+                {transcript || 'En attente de dictée...'}
+              </p>
             </div>
-          )}
 
-          {translatedVoiceText && (
-            <div className="p-5 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 text-base text-white shadow-lg animate-slide-up flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs text-indigo-300 font-semibold mb-1 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Traduction Restructurée ({targetLangObj.name}) :</span>
+            {/* AI Translation output */}
+            <div className="p-4 rounded-xl theme-card border space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold theme-accent-badge">
+                <span>{targetLangObj.name} (Traduction)</span>
+                <span className="text-base">{targetLangObj.flag}</span>
+              </div>
+              <p className="text-sm theme-text-primary font-medium leading-relaxed select-text">
+                {translatedVoiceText || 'Traduction en attente...'}
+              </p>
+
+              {translatedVoiceText && (
+                <div className="flex items-center justify-end gap-2 pt-2 border-t theme-card-subtle">
+                  <button
+                    id="btn-play-voice-tts"
+                    onClick={() => handlePlayTts(translatedVoiceText, targetLang)}
+                    className="p-1.5 rounded-lg theme-text-muted hover:theme-text-primary text-xs flex items-center gap-1"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{isPlayingAudio ? 'Lecture...' : 'Écouter'}</span>
+                  </button>
+
+                  <button
+                    id="btn-copy-voice-text"
+                    onClick={() => handleCopy(translatedVoiceText)}
+                    className="p-1.5 rounded-lg theme-text-muted hover:theme-text-primary text-xs flex items-center gap-1"
+                  >
+                    {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copySuccess ? 'Copié' : 'Copier'}</span>
+                  </button>
                 </div>
-                <p className="font-semibold text-lg text-indigo-50">{translatedVoiceText}</p>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0 pt-2">
-                <button
-                  id="btn-replay-voice-audio"
-                  onClick={() => handlePlayTts(translatedVoiceText, targetLang)}
-                  className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md"
-                  title="Réécouter"
-                >
-                  <Volume2 className="w-4 h-4" />
-                </button>
-                <button
-                  id="btn-copy-voice-target"
-                  onClick={() => handleCopy(translatedVoiceText)}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all border border-slate-700"
-                  title="Copier"
-                >
-                  {copySuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Conversation Thread History */}
       {conversationHistory.length > 0 && (
-        <div className="p-5 bg-[#0b1329] border border-slate-800 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
-            <span>Échanges Récents</span>
-            <button
-              onClick={() => setConversationHistory([])}
-              className="text-slate-500 hover:text-slate-300 text-[11px]"
-            >
-              Effacer la session
-            </button>
+        <div className="theme-card rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b theme-card-subtle pb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider theme-text-primary flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <span>Historique de la conversation vocale</span>
+            </h4>
+            <span className="text-xs theme-text-muted">{conversationHistory.length} échanges</span>
           </div>
 
-          <div className="space-y-3 max-h-60 overflow-y-auto">
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
             {conversationHistory.map((item, idx) => (
-              <div key={idx} className="p-3 rounded-xl bg-[#0e193a] border border-slate-800/80 text-xs space-y-1">
-                <div className="text-slate-400 font-medium">« {item.text} »</div>
-                <div className="text-indigo-200 font-semibold text-sm flex items-center justify-between">
-                  <span>→ {item.translated}</span>
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl theme-card-subtle border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+              >
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 theme-text-muted font-medium">
+                    <span>{sourceLangObj.name} :</span>
+                    <span className="theme-text-primary">{item.text}</span>
+                  </div>
+                  <div className="flex items-center gap-2 theme-text-primary font-bold">
+                    <span className="theme-text-muted font-medium">{targetLangObj.name} :</span>
+                    <span>{item.translated}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-auto">
                   <button
                     onClick={() => handlePlayTts(item.translated, targetLang)}
-                    className="p-1 text-slate-400 hover:text-white"
+                    className="p-1.5 rounded-lg theme-text-muted hover:theme-text-primary"
+                    title="Écouter"
                   >
-                    <Volume2 className="w-3.5 h-3.5" />
+                    <Volume2 className="w-4 h-4 text-indigo-400" />
                   </button>
                 </div>
               </div>
@@ -396,6 +487,7 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
         </div>
       )}
 
+      {/* Language Modals */}
       <LanguageSelectorModal
         isOpen={isSourceModalOpen}
         onClose={() => setIsSourceModalOpen(false)}

@@ -251,20 +251,45 @@ export function playUiChime(type: 'click' | 'success' | 'toggle' | 'delete'): vo
   }
 }
 
+// Screen Wake Lock reference
+let activeWakeLock: any = null;
+
+export async function manageWakeLock(enable: boolean): Promise<void> {
+  try {
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      if (enable && !activeWakeLock) {
+        activeWakeLock = await (navigator as any).wakeLock.request('screen');
+      } else if (!enable && activeWakeLock) {
+        await activeWakeLock.release();
+        activeWakeLock = null;
+      }
+    }
+  } catch (err) {
+    // Wake Lock not supported or rejected
+  }
+}
+
 export function applyThemeToDOM(settings: AppSettings): void {
   if (typeof document === 'undefined') return;
 
   const root = document.documentElement;
 
-  // Set Theme Preset class
+  // Set Theme attributes
   root.dataset.theme = settings.themePreset;
   root.dataset.fontScale = settings.fontSizeScale;
   root.dataset.glassmorphism = settings.glassmorphism;
   root.dataset.contrast = settings.highContrast ? 'high' : 'normal';
+  root.dataset.borderWidth = settings.borderWidth;
   root.dataset.reducedMotion = settings.reducedMotion ? 'true' : 'false';
   root.dataset.dyslexic = settings.dyslexicFont ? 'true' : 'false';
   root.dir = settings.rtlDirection ? 'rtl' : 'ltr';
 
-  // Apply accent color CSS variable
+  // Apply accent color CSS variables
   root.style.setProperty('--verbamind-accent', settings.accentColor);
+  root.style.setProperty('--verbamind-accent-glow', `${settings.accentColor}55`);
+  root.style.setProperty('--verbamind-accent-subtle', `${settings.accentColor}22`);
+
+  // Screen Wake Lock
+  manageWakeLock(settings.keepScreenAwake);
 }
+
