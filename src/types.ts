@@ -34,6 +34,7 @@ export interface UseCasePreset {
 export interface TranslationResponse {
   translatedText: string;
   detectedSourceLang?: string;
+  detectedSourceLangName?: string;
   phonetic?: string;
   detectedGrammarIssues?: string[];
   styleApplied?: string;

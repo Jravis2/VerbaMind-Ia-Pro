@@ -21,7 +21,8 @@ import { ToneStyle, HistoryItem, OcrTranslationResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
 import { ToneSelector } from './ToneSelector';
-import { speakTextWithBrowser, fetchWithExponentialBackoff } from '../utils/audio';
+import { speakTextWithBrowser } from '../utils/audio';
+import { executeOcrTranslation } from '../services/translationService';
 
 interface ARLiveCameraViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -139,26 +140,12 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({
       setIsLoading(true);
 
       try {
-        const res = await fetchWithExponentialBackoff(
-          '/api/ocr-translate',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              image: base64Image,
-              targetLang,
-              tone,
-            }),
-          },
-          2,
-          1000
-        );
+        const data: OcrTranslationResponse = await executeOcrTranslation({
+          image: base64Image,
+          targetLang,
+          tone,
+        });
 
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-
-        const data: OcrTranslationResponse = await res.json();
         setOcrResult(data);
         setErrorMessage(null);
 

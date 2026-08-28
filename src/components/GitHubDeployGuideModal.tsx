@@ -169,13 +169,13 @@ export const GitHubDeployGuideModal: React.FC<GitHubDeployGuideModalProps> = ({
                 ✓
               </span>
               <h3 className="font-bold text-white text-sm">
-                Publication automatique en 30 secondes
+                Traduction, Caméra OCR & Voix Actives sur GitHub Pages
               </h3>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed pl-9">
-              Dès l'exportation, GitHub compile l'application et la met en ligne automatiquement. Votre application sera disponible en direct sur :
+            <p className="text-xs text-slate-300 leading-relaxed pl-9">
+              Tous les boutons (Traduction, Caméra OCR, Voix, Audio, Restructuration syntaxique) sont désormais configurés pour fonctionner de manière autonome sur votre site GitHub Pages ! Vous pouvez également renseigner votre clé Gemini gratuite via le bouton <strong className="text-indigo-300">« Clé IA »</strong> en haut à droite.
             </p>
-            <div className="ml-9">
+            <div className="ml-9 pt-1">
               <a
                 href={targetUrl}
                 target="_blank"

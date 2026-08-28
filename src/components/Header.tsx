@@ -9,6 +9,7 @@ import {
   Zap,
   Globe,
   Github,
+  Key,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
 
@@ -19,6 +20,8 @@ interface HeaderProps {
   onChangeMode: (mode: AppMode) => void;
   onOpenHistory: () => void;
   onOpenGitHubGuide?: () => void;
+  onOpenApiKeySettings?: () => void;
+  hasApiKey?: boolean;
   historyCount: number;
   isOnline: boolean;
   onCheckConnection?: () => Promise<boolean>;
@@ -29,6 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeMode,
   onOpenHistory,
   onOpenGitHubGuide,
+  onOpenApiKeySettings,
+  hasApiKey,
   historyCount,
   isOnline,
   onCheckConnection,
@@ -118,6 +123,23 @@ export const Header: React.FC<HeaderProps> = ({
               isOnline={isOnline}
               onRefreshCheck={onCheckConnection}
             />
+
+            {/* API Key / IA Settings Button */}
+            {onOpenApiKeySettings && (
+              <button
+                id="btn-open-api-key-modal"
+                onClick={onOpenApiKeySettings}
+                title="Paramètres IA & Clé Gemini"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all shadow-sm ${
+                  hasApiKey
+                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/40 text-emerald-300'
+                    : 'bg-[#0e183a] hover:bg-indigo-600/30 border-indigo-500/30 text-indigo-200'
+                }`}
+              >
+                <Key className={`w-4 h-4 ${hasApiKey ? 'text-emerald-400' : 'text-indigo-400'}`} />
+                <span className="hidden sm:inline">{hasApiKey ? 'Gemini IA' : 'Clé IA'}</span>
+              </button>
+            )}
 
             {/* GitHub Pages Guide Button */}
             {onOpenGitHubGuide && (

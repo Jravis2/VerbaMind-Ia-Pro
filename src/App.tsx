@@ -11,8 +11,10 @@ import { VoiceTranslatorView } from './components/VoiceTranslatorView';
 import { UseCasesView } from './components/UseCasesView';
 import { HistoryModal } from './components/HistoryModal';
 import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { useNetworkStatus } from './utils/useNetworkStatus';
+import { getStoredApiKey } from './services/clientGemini';
 import { HistoryItem, ToneStyle } from './types';
 import { Sparkles, Shield, Cpu, Zap, Globe, Layers, BookOpen } from 'lucide-react';
 
@@ -23,6 +25,12 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  useEffect(() => {
+    setHasApiKey(Boolean(getStoredApiKey()));
+  }, [isApiKeyModalOpen]);
 
   // Network Status Hook
   const {
@@ -117,6 +125,8 @@ export default function App() {
         onChangeMode={(mode) => setCurrentMode(mode)}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
         onOpenGitHubGuide={() => setIsGitHubGuideOpen(true)}
+        onOpenApiKeySettings={() => setIsApiKeyModalOpen(true)}
+        hasApiKey={hasApiKey}
         historyCount={history.length}
         isOnline={isOnline}
         onCheckConnection={checkConnection}
@@ -214,6 +224,12 @@ export default function App() {
       <GitHubDeployGuideModal
         isOpen={isGitHubGuideOpen}
         onClose={() => setIsGitHubGuideOpen(false)}
+      />
+
+      {/* Gemini API Key / IA Settings Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
     </div>
   );

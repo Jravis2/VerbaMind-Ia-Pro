@@ -30,6 +30,7 @@ import {
   isSpeechRecognitionSupported,
   createSpeechRecognizer,
 } from '../utils/audio';
+import { executeTranslation, executeSyntaxInspection } from '../services/translationService';
 
 interface TextTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -159,35 +160,14 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
       console.groupEnd();
 
       try {
-        const response = await fetchWithExponentialBackoff(
-          '/api/translate',
-          {
-            method: 'POST',
-            headers: requestHeaders,
-            body: JSON.stringify(payload),
-          },
-          3,
-          1000,
-          controller.signal
-        );
-
-        console.log(`[VerbaMind API] 📥 Raw Response Status: ${response.status} (${response.statusText})`);
-
-        if (!response.ok) {
-          const errorBody = await response.text();
-          console.error('[VerbaMind API] ❌ HTTP Error Body:', errorBody);
-          throw new Error(`HTTP error ${response.status}: ${errorBody}`);
-        }
-
-        const data = await response.json();
-
-        console.groupCollapsed(`[VerbaMind API] ✅ Raw Response Data (${data.latencyMs ?? '?'}ms)`);
-        console.log('Raw JSON Object:', data);
-        console.log('Translated Text:', data.translatedText);
-        console.log('Detected Source Language:', data.detectedSourceLang, data.detectedSourceLangName);
-        console.log('Phonetic:', data.phonetic);
-        console.log('Grammar Issues / Restructuring:', data.detectedGrammarIssues);
-        console.groupEnd();
+        const data = await executeTranslation({
+          text: text.trim(),
+          sourceLang: sLang,
+          targetLang: tLang,
+          tone: currentTone,
+          withPhonetic: phoneticsFlag,
+          signal: controller.signal,
+        });
 
         setTranslatedText(data.translatedText || '');
         setPhonetic(data.phonetic || '');
@@ -217,12 +197,8 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
           console.log('[VerbaMind API] ℹ️ Translation request aborted (user continues typing)');
           return;
         }
-        console.error('[VerbaMind API] ❌ Translation Error:', {
-          message: error?.message,
-          stack: error?.stack,
-          error,
-        });
-        setStatusMessage('Erreur de réseau (nouvel essai automatique)');
+        console.error('[VerbaMind API] ❌ Translation Error:', error);
+        setStatusMessage('Erreur de traduction');
       } finally {
         setIsLoading(false);
       }
@@ -368,13 +344,13 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     console.log('[VerbaMind API] 🔍 Syntax Analysis Request Payload:', syntaxPayload);
 
     try {
-      const res = await fetchWithExponentialBackoff('/api/explain-syntax', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(syntaxPayload),
+      const data = await executeSyntaxInspection({
+        sourceText,
+        targetText: translatedText,
+        sourceLang: sourceLangObj.name,
+        targetLang: targetLangObj.name,
+        tone,
       });
-      const data = await res.json();
-      console.log('[VerbaMind API] 🔍 Syntax Analysis Response:', data);
       setSyntaxAnalysis(data);
     } catch (err) {
       console.error('[VerbaMind API] ❌ Syntax analysis error:', err);

@@ -22,6 +22,7 @@ import {
   playRawPcmAudio,
   fetchWithExponentialBackoff,
 } from '../utils/audio';
+import { executeTranslation } from '../services/translationService';
 
 interface VoiceTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -83,18 +84,14 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
     setErrorMessage(null);
     setIsTranslating(true);
     try {
-      const res = await fetchWithExponentialBackoff('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: textToTranslate,
-          sourceLang: sLang,
-          targetLang: tLang,
-          tone,
-          withPhonetic: false,
-        }),
+      const data = await executeTranslation({
+        text: textToTranslate,
+        sourceLang: sLang,
+        targetLang: tLang,
+        tone,
+        withPhonetic: false,
       });
-      const data = await res.json();
+
       const translated = data.translatedText || '';
       setTranslatedVoiceText(translated);
 
