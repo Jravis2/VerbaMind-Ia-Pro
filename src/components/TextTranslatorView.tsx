@@ -35,6 +35,7 @@ interface TextTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
   initialSourceText?: string;
   initialTone?: ToneStyle;
+  isOnline?: boolean;
 }
 
 const QUICK_SOURCE_LANGS = [
@@ -57,6 +58,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   onSaveHistory,
   initialSourceText = '',
   initialTone = 'natural',
+  isOnline = true,
 }) => {
   const [sourceText, setSourceText] = useState(initialSourceText);
   const [translatedText, setTranslatedText] = useState('');
@@ -116,6 +118,12 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
         setLatencyMs(null);
         setIsLoading(false);
         setStatusMessage('Prêt');
+        return;
+      }
+
+      if (!isOnline) {
+        setIsLoading(false);
+        setStatusMessage('⚠️ Hors ligne : Connexion requise pour Gemini AI');
         return;
       }
 

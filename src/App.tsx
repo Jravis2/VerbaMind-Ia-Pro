@@ -11,6 +11,8 @@ import { VoiceTranslatorView } from './components/VoiceTranslatorView';
 import { UseCasesView } from './components/UseCasesView';
 import { HistoryModal } from './components/HistoryModal';
 import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
+import { OfflineBanner } from './components/OfflineBanner';
+import { useNetworkStatus } from './utils/useNetworkStatus';
 import { HistoryItem, ToneStyle } from './types';
 import { Sparkles, Shield, Cpu, Zap, Globe, Layers, BookOpen } from 'lucide-react';
 
@@ -21,6 +23,14 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
+
+  // Network Status Hook
+  const {
+    isOnline,
+    showReconnectedToast,
+    checkConnection,
+    dismissReconnectedToast,
+  } = useNetworkStatus();
 
   // States passed from UseCases to TextTranslator
   const [prefilledText, setPrefilledText] = useState('');
@@ -108,6 +118,17 @@ export default function App() {
         onOpenHistory={() => setIsHistoryModalOpen(true)}
         onOpenGitHubGuide={() => setIsGitHubGuideOpen(true)}
         historyCount={history.length}
+        isOnline={isOnline}
+        onCheckConnection={checkConnection}
+      />
+
+      {/* Online / Offline Status Warning Banner */}
+      <OfflineBanner
+        isOnline={isOnline}
+        showReconnectedToast={showReconnectedToast}
+        onDismissToast={dismissReconnectedToast}
+        onCheckConnection={checkConnection}
+        onOpenHistory={() => setIsHistoryModalOpen(true)}
       />
 
       {/* Main View Area */}
@@ -117,15 +138,22 @@ export default function App() {
             onSaveHistory={handleSaveHistory}
             initialSourceText={prefilledText}
             initialTone={prefilledTone}
+            isOnline={isOnline}
           />
         )}
 
         {currentMode === 'ar_camera' && (
-          <ARLiveCameraView onSaveHistory={handleSaveHistory} />
+          <ARLiveCameraView
+            onSaveHistory={handleSaveHistory}
+            isOnline={isOnline}
+          />
         )}
 
         {currentMode === 'voice' && (
-          <VoiceTranslatorView onSaveHistory={handleSaveHistory} />
+          <VoiceTranslatorView
+            onSaveHistory={handleSaveHistory}
+            isOnline={isOnline}
+          />
         )}
 
         {currentMode === 'use_cases' && (

@@ -10,6 +10,7 @@ import {
   Globe,
   Github,
 } from 'lucide-react';
+import { NetworkStatusBadge } from './NetworkStatusBadge';
 
 export type AppMode = 'text' | 'ar_camera' | 'voice' | 'use_cases';
 
@@ -19,6 +20,8 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenGitHubGuide?: () => void;
   historyCount: number;
+  isOnline: boolean;
+  onCheckConnection?: () => Promise<boolean>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenHistory,
   onOpenGitHubGuide,
   historyCount,
+  isOnline,
+  onCheckConnection,
 }) => {
   const modes: { id: AppMode; label: string; icon: any; badge?: string }[] = [
     { id: 'text', label: 'Éditeur & Traduction Live', icon: Layers },
@@ -107,6 +112,12 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>+200 Langues</span>
               </span>
             </div>
+
+            {/* Network Online / Offline Status Badge */}
+            <NetworkStatusBadge
+              isOnline={isOnline}
+              onRefreshCheck={onCheckConnection}
+            />
 
             {/* GitHub Pages Guide Button */}
             {onOpenGitHubGuide && (

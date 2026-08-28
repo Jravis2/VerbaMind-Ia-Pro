@@ -25,9 +25,13 @@ import {
 
 interface VoiceTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
+  isOnline?: boolean;
 }
 
-export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSaveHistory }) => {
+export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({
+  onSaveHistory,
+  isOnline = true,
+}) => {
   const [sourceLang, setSourceLang] = useState('fr');
   const [targetLang, setTargetLang] = useState('en');
   const [tone, setTone] = useState<ToneStyle>('natural');
@@ -38,6 +42,7 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
     { sender: 'source' | 'target'; text: string; translated: string; timestamp: Date }[]
   >([]);
@@ -71,6 +76,11 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
   // Translate transcribed text and speak
   const translateAndSpeak = async (textToTranslate: string, sLang = sourceLang, tLang = targetLang) => {
     if (!textToTranslate.trim()) return;
+    if (!isOnline) {
+      setErrorMessage('⚠️ Mode hors ligne : Une connexion Internet est requise pour la traduction vocale avec Gemini AI.');
+      return;
+    }
+    setErrorMessage(null);
     setIsTranslating(true);
     try {
       const res = await fetchWithExponentialBackoff('/api/translate', {
@@ -210,7 +220,7 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
           mediaRecorder.start();
           setIsRecording(true);
         } catch (e) {
-          alert("Accès microphone non autorisé ou non supporté.");
+          setErrorMessage("Accès microphone non autorisé ou non supporté par le navigateur.");
         }
       }
     }
@@ -232,6 +242,21 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
     <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in">
       {/* Tone selection */}
       <ToneSelector currentTone={tone} onChangeTone={(t) => setTone(t)} />
+
+      {/* Error banner if any */}
+      {errorMessage && (
+        <div className="p-3.5 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="p-1 rounded-lg hover:bg-rose-900/60 text-rose-300 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Language Header bar */}
       <div className="flex items-center justify-between p-4 bg-[#0c152e] border border-indigo-500/30 rounded-2xl shadow-xl">

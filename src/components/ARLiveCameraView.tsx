@@ -25,9 +25,13 @@ import { speakTextWithBrowser, fetchWithExponentialBackoff } from '../utils/audi
 
 interface ARLiveCameraViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
+  isOnline?: boolean;
 }
 
-export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistory }) => {
+export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({
+  onSaveHistory,
+  isOnline = true,
+}) => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isLiveStreamScanning, setIsLiveStreamScanning] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
@@ -119,6 +123,13 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
   // Process a frame or image with Gemini OCR
   const analyzeImageFrame = useCallback(
     async (base64Image: string, isFromLiveStream = false) => {
+      if (!isOnline) {
+        if (!isFromLiveStream) {
+          setErrorMessage('⚠️ Mode hors ligne actif. Une connexion Internet est requise pour analyser les images avec Gemini OCR.');
+        }
+        return;
+      }
+
       const now = Date.now();
       if (isAnalyzingRef.current && isFromLiveStream) return;
       if (isFromLiveStream && now - lastScanTimeRef.current < 3500) return;
