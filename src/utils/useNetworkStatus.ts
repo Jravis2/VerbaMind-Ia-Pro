@@ -21,35 +21,19 @@ export function useNetworkStatus(): NetworkStatus {
 
   const checkConnection = useCallback(async (): Promise<boolean> => {
     try {
-      // Fast check with navigator first
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        setIsOnline(false);
-        return false;
+      if (typeof navigator !== 'undefined') {
+        const online = navigator.onLine;
+        setIsOnline(online);
+        if (online) {
+          setLastOnlineAt(Date.now());
+        } else {
+          setLastOfflineAt(Date.now());
+        }
+        return online;
       }
-
-      // Quick fetch to verify actual external/internal reachability
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch('/api/health', {
-        method: 'GET',
-        cache: 'no-store',
-        signal: controller.signal,
-      }).catch(() => null);
-
-      clearTimeout(timeoutId);
-
-      const reachable = !!res && res.ok;
-      setIsOnline(reachable);
-      if (reachable) {
-        setLastOnlineAt(Date.now());
-      } else {
-        setLastOfflineAt(Date.now());
-      }
-      return reachable;
+      return true;
     } catch {
-      setIsOnline(false);
-      setLastOfflineAt(Date.now());
-      return false;
+      return true;
     }
   }, []);
 
