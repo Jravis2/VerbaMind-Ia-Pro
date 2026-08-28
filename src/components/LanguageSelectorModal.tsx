@@ -41,6 +41,31 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
     });
   }, [searchQuery, selectedCategory]);
 
+  // Handle ESC key and Enter key
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (isSourceSelector && searchQuery.toLowerCase().includes('auto')) {
+        onSelect({ code: 'auto', name: 'Détection Automatique', nativeName: 'Auto Detect', category: 'living' });
+        onClose();
+      } else if (filteredLanguages.length > 0) {
+        onSelect(filteredLanguages[0]);
+        onClose();
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const categories: { id: LanguageCategory | 'all'; label: string; icon: any; count: number }[] = [
@@ -86,6 +111,7 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({
               id="input-search-languages"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Rechercher une langue, un pays, un dialecte, un script (ex: Latin, Wolof, Klingon, Hiéroglyphes)..."
               className="w-full pl-11 pr-4 py-3 bg-[#0f1b38] border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
               autoFocus

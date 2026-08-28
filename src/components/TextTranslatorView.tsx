@@ -12,20 +12,21 @@ import {
   Check,
   Zap,
   Clock,
-  Share2,
   Trash2,
   Layers,
-  HelpCircle,
+  Search,
+  CheckCircle2,
 } from 'lucide-react';
 import { Language, ToneStyle, HistoryItem, SyntaxAnalysisResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
 import { ToneSelector } from './ToneSelector';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
+import { LanguageDropdown } from './LanguageDropdown';
 import { SyntaxInspectorModal } from './SyntaxInspectorModal';
 import {
   fetchWithExponentialBackoff,
-  playRawPcmAudio,
   speakTextWithBrowser,
+  stopBrowserSpeech,
   isSpeechRecognitionSupported,
   createSpeechRecognizer,
 } from '../utils/audio';
@@ -35,6 +36,22 @@ interface TextTranslatorViewProps {
   initialSourceText?: string;
   initialTone?: ToneStyle;
 }
+
+const QUICK_SOURCE_LANGS = [
+  { code: 'auto', label: 'Détection auto', flag: '✨' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'en', label: 'Anglais', flag: '🇺🇸' },
+  { code: 'es', label: 'Espagnol', flag: '🇪🇸' },
+  { code: 'de', label: 'Allemand', flag: '🇩🇪' },
+];
+
+const QUICK_TARGET_LANGS = [
+  { code: 'en', label: 'Anglais', flag: '🇺🇸' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'es', label: 'Espagnol', flag: '🇪🇸' },
+  { code: 'de', label: 'Allemand', flag: '🇩🇪' },
+  { code: 'ja', label: 'Japonais', flag: '🇯🇵' },
+];
 
 export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   onSaveHistory,
@@ -47,11 +64,13 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   const [sourceLang, setSourceLang] = useState<string>('auto');
   const [targetLang, setTargetLang] = useState<string>('en');
   const [detectedLangCode, setDetectedLangCode] = useState<string>('');
+  const [detectedLangName, setDetectedLangName] = useState<string>('');
   const [tone, setTone] = useState<ToneStyle>(initialTone);
   const [isLoading, setIsLoading] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isPlayingSourceAudio, setIsPlayingSourceAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [withPhonetics, setWithPhonetics] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('Prêt');
@@ -139,9 +158,13 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
         setTranslatedText(data.translatedText || '');
         setPhonetic(data.phonetic || '');
         setLatencyMs(data.latencyMs || null);
+
         if (data.detectedSourceLang) {
           setDetectedLangCode(data.detectedSourceLang);
+          const matchedLang = LANGUAGES_DATABASE.find((l) => l.code === data.detectedSourceLang);
+          setDetectedLangName(data.detectedSourceLangName || matchedLang?.name || data.detectedSourceLang);
         }
+
         setStatusMessage(`Traduit en ${data.latencyMs}ms`);
 
         // Save to recent history silently
@@ -169,7 +192,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     [onSaveHistory]
   );
 
-  // 200ms Debounced trigger on typing
+  // Debounced trigger on typing
   useEffect(() => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -185,7 +208,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
 
     debounceTimerRef.current = setTimeout(() => {
       performTranslation(sourceText, tone, sourceLang, targetLang, withPhonetics);
-    }, 200);
+    }, 350);
 
     return () => {
       if (debounceTimerRef.current) {
@@ -197,15 +220,10 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   // Swap Languages
   const handleSwapLanguages = () => {
     if (sourceLang === 'auto') {
-      if (detectedLangCode) {
-        const temp = targetLang;
-        setTargetLang(detectedLangCode);
-        setSourceLang(temp);
-      } else {
-        const temp = targetLang;
-        setTargetLang('fr');
-        setSourceLang(temp);
-      }
+      const resolvedSource = detectedLangCode || 'fr';
+      const temp = targetLang;
+      setTargetLang(resolvedSource);
+      setSourceLang(temp);
     } else {
       const temp = sourceLang;
       setSourceLang(targetLang);
@@ -222,7 +240,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   const handleReverseTranslation = async () => {
     if (!translatedText) return;
     setSourceText(translatedText);
-    const prevSource = sourceLang === 'auto' ? 'fr' : sourceLang;
+    const prevSource = sourceLang === 'auto' ? (detectedLangCode || 'fr') : sourceLang;
     setSourceLang(targetLang);
     setTargetLang(prevSource);
   };
@@ -234,29 +252,35 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  // Audio Text-To-Speech Playback
-  const handlePlayAudio = async (text: string, langCode: string) => {
-    if (!text || isPlayingAudio) return;
-    setIsPlayingAudio(true);
-    try {
-      // First try Gemini high-fidelity TTS
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'Kore' }),
-      });
-      const data = await res.json();
-      if (data.audioBase64) {
-        await playRawPcmAudio(data.audioBase64, data.sampleRate || 24000);
-      } else {
-        // Fallback to browser Web Speech API
-        await speakTextWithBrowser(text, langCode);
+  // Browser SpeechSynthesis API to read text aloud
+  const handleSpeakWithBrowser = async (text: string, langCode: string, isSource = false) => {
+    if (!text || text.trim() === '') return;
+
+    if (isSource) {
+      if (isPlayingSourceAudio) {
+        stopBrowserSpeech();
+        setIsPlayingSourceAudio(false);
+        return;
       }
-    } catch (e) {
-      console.warn('TTS error, using browser fallback:', e);
-      await speakTextWithBrowser(text, langCode);
-    } finally {
-      setIsPlayingAudio(false);
+      setIsPlayingSourceAudio(true);
+      try {
+        const resolvedLang = langCode === 'auto' ? (detectedLangCode || 'fr') : langCode;
+        await speakTextWithBrowser(text, resolvedLang);
+      } finally {
+        setIsPlayingSourceAudio(false);
+      }
+    } else {
+      if (isPlayingAudio) {
+        stopBrowserSpeech();
+        setIsPlayingAudio(false);
+        return;
+      }
+      setIsPlayingAudio(true);
+      try {
+        await speakTextWithBrowser(text, langCode);
+      } finally {
+        setIsPlayingAudio(false);
+      }
     }
   };
 
@@ -296,7 +320,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     setIsSyntaxModalOpen(true);
     setIsAnalyzingSyntax(true);
     try {
-      const res = await fetch('/api/explain-syntax', {
+      const res = await fetchWithExponentialBackoff('/api/explain-syntax', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -359,30 +383,84 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Source Text Card */}
         <div className="flex flex-col bg-[#0b142c]/90 border border-slate-800 rounded-2xl shadow-xl backdrop-blur-md overflow-hidden transition-all focus-within:border-indigo-500/60 focus-within:ring-1 focus-within:ring-indigo-500/20">
-          {/* Card Header: Source Language Picker */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/80 bg-[#0d1838]">
-            <div className="flex items-center gap-2">
-              <button
-                id="btn-select-source-lang"
-                onClick={() => setIsSourceModalOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#14234b] border border-indigo-500/30 text-white hover:bg-indigo-600/30 hover:border-indigo-400 text-xs font-semibold transition-all group"
-              >
-                <span className="text-base leading-none">{sourceLangObj.flag || '🌐'}</span>
-                <span>{sourceLangObj.name}</span>
-                <span className="text-[10px] text-indigo-300 group-hover:text-white">▼</span>
-              </button>
+          {/* Card Header: Source Language Picker & Searchable Dropdown */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-800/80 bg-[#0d1838]">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Searchable Language Dropdown Component */}
+              <LanguageDropdown
+                idPrefix="source-lang-dropdown"
+                selectedCode={sourceLang}
+                onSelect={(code) => setSourceLang(code)}
+                onOpenFullModal={() => setIsSourceModalOpen(true)}
+                isSource={true}
+                detectedLangName={detectedLangName}
+                detectedLangCode={detectedLangCode}
+              />
 
-              {detectedLangCode && sourceLang === 'auto' && (
-                <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-fade-in">
-                  Détecté : {detectedLangCode}
-                </span>
+              {/* Quick Language Switcher Pills */}
+              <div className="hidden sm:flex items-center gap-1">
+                {QUICK_SOURCE_LANGS.map((item) => {
+                  const isActive = sourceLang === item.code;
+                  return (
+                    <button
+                      key={item.code}
+                      type="button"
+                      onClick={() => setSourceLang(item.code)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-indigo-600/40 border border-indigo-500 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span className="text-xs select-none">{item.flag}</span>
+                      <span className="hidden md:inline">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Auto-detect Status Pill with lock button */}
+              {sourceLang === 'auto' && detectedLangCode && (
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs animate-fade-in">
+                  <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                  <span>
+                    Détecté : <strong className="text-white">{detectedLangName || detectedLangCode}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    title="Fixer cette langue comme source"
+                    onClick={() => setSourceLang(detectedLangCode)}
+                    className="ml-1 text-[10px] underline hover:text-white"
+                  >
+                    Fixer
+                  </button>
+                </div>
               )}
             </div>
 
             {/* Quick action toolbar */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 ml-auto">
+              {/* Source Speech Synthesis Read Aloud */}
+              {sourceText && (
+                <button
+                  id="btn-speak-source-text"
+                  type="button"
+                  onClick={() => handleSpeakWithBrowser(sourceText, sourceLang, true)}
+                  title={isPlayingSourceAudio ? 'Arrêter la lecture' : 'Écouter le texte source (SpeechSynthesis)'}
+                  className={`p-2 rounded-xl transition-all ${
+                    isPlayingSourceAudio
+                      ? 'bg-indigo-600 text-white animate-pulse'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                  }`}
+                >
+                  {isPlayingSourceAudio ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+              )}
+
+              {/* Dictation mic */}
               <button
                 id="btn-toggle-mic-source"
+                type="button"
                 onClick={toggleSpeechRecognition}
                 title={isRecording ? 'Arrêter la dictée' : 'Activer la dictée vocale'}
                 className={`p-2 rounded-xl transition-all ${
@@ -394,9 +472,11 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
 
+              {/* Clear button */}
               {sourceText && (
                 <button
                   id="btn-clear-source"
+                  type="button"
                   onClick={() => setSourceText('')}
                   title="Effacer le texte"
                   className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-slate-800/80 transition-all"
@@ -413,7 +493,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
               id="textarea-source-text"
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
-              placeholder="Saisissez ou collez votre texte ici (même désordonné ou avec des fautes d'orthographe)..."
+              placeholder="Saisissez ou collez votre texte ici (la langue sera automatiquement détectée)..."
               className="w-full flex-1 bg-transparent text-white placeholder-slate-500 text-base leading-relaxed resize-none focus:outline-none font-sans"
               rows={8}
             />
@@ -458,10 +538,11 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
         {/* Target Text Card (Output) */}
         <div className="flex flex-col bg-[#0b142c]/90 border border-indigo-500/30 rounded-2xl shadow-xl shadow-indigo-950/40 backdrop-blur-md overflow-hidden transition-all">
           {/* Card Header: Target Language Picker + Swap Button */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/80 bg-[#0e193c]">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-800/80 bg-[#0e193c]">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 id="btn-swap-languages"
+                type="button"
                 onClick={handleSwapLanguages}
                 title="Inverser les langues"
                 className="p-1.5 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white hover:bg-indigo-600/40 border border-slate-700 transition-all active:rotate-180 duration-200"
@@ -469,19 +550,40 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 <ArrowRightLeft className="w-3.5 h-3.5" />
               </button>
 
-              <button
-                id="btn-select-target-lang"
-                onClick={() => setIsTargetModalOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#172856] border border-indigo-400/40 text-white hover:bg-indigo-600/40 text-xs font-semibold transition-all group"
-              >
-                <span className="text-base leading-none">{targetLangObj.flag || '🌐'}</span>
-                <span>{targetLangObj.name}</span>
-                <span className="text-[10px] text-indigo-300 group-hover:text-white">▼</span>
-              </button>
+              {/* Searchable Language Dropdown for Target */}
+              <LanguageDropdown
+                idPrefix="target-lang-dropdown"
+                selectedCode={targetLang}
+                onSelect={(code) => setTargetLang(code)}
+                onOpenFullModal={() => setIsTargetModalOpen(true)}
+                isSource={false}
+              />
+
+              {/* Quick Target Language Switcher Pills */}
+              <div className="hidden sm:flex items-center gap-1">
+                {QUICK_TARGET_LANGS.map((item) => {
+                  const isActive = targetLang === item.code;
+                  return (
+                    <button
+                      key={item.code}
+                      type="button"
+                      onClick={() => setTargetLang(item.code)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-indigo-600/40 border border-indigo-500 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span className="text-xs select-none">{item.flag}</span>
+                      <span className="hidden md:inline">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Performance Latency & Status Badge */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ml-auto">
               {isLoading ? (
                 <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse">
                   <Zap className="w-3 h-3 text-indigo-400 animate-spin" />
@@ -500,7 +602,10 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
           <div className="flex-1 p-5 min-h-[260px] flex flex-col justify-between">
             <div className="space-y-3">
               {translatedText ? (
-                <div className="text-white text-base leading-relaxed font-sans select-text whitespace-pre-wrap">
+                <div
+                  id="display-translated-text"
+                  className="text-white text-base leading-relaxed font-sans select-text whitespace-pre-wrap"
+                >
                   {translatedText}
                 </div>
               ) : (
@@ -521,23 +626,28 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
             {/* Target Actions Toolbar */}
             <div className="flex flex-wrap items-center justify-between pt-4 mt-4 border-t border-slate-800/60">
               <div className="flex items-center gap-2">
-                {/* Audio TTS button */}
+                {/* Dedicated Speaker Icon Button using Browser SpeechSynthesis API */}
                 <button
                   id="btn-play-target-audio"
-                  onClick={() => handlePlayAudio(translatedText, targetLang)}
-                  disabled={!translatedText || isPlayingAudio}
-                  title="Écouter la prononciation"
-                  className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 transition-all flex items-center gap-1.5 text-xs font-medium"
+                  type="button"
+                  onClick={() => handleSpeakWithBrowser(translatedText, targetLang, false)}
+                  disabled={!translatedText}
+                  title={isPlayingAudio ? 'Arrêter la lecture vocale' : 'Écouter la traduction (SpeechSynthesis)'}
+                  className={`p-2 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                    isPlayingAudio
+                      ? 'bg-indigo-600 border-indigo-400 text-white animate-pulse shadow-md shadow-indigo-600/40'
+                      : 'bg-[#14234b]/60 border-indigo-500/30 text-indigo-300 hover:text-white hover:bg-indigo-600/30 hover:border-indigo-400 disabled:opacity-40 disabled:hover:bg-[#14234b]/60'
+                  }`}
                 >
                   {isPlayingAudio ? (
                     <>
-                      <VolumeX className="w-4 h-4 text-indigo-400 animate-pulse" />
-                      <span className="hidden sm:inline text-indigo-300">Lecture...</span>
+                      <VolumeX className="w-4 h-4 text-white" />
+                      <span>Lecture...</span>
                     </>
                   ) : (
                     <>
                       <Volume2 className="w-4 h-4 text-indigo-400" />
-                      <span className="hidden sm:inline">Écouter</span>
+                      <span>Écouter</span>
                     </>
                   )}
                 </button>
@@ -545,6 +655,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 {/* Copy button */}
                 <button
                   id="btn-copy-target-text"
+                  type="button"
                   onClick={() => handleCopy(translatedText)}
                   disabled={!translatedText}
                   title="Copier le texte"
@@ -566,6 +677,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 {/* Reverse translation check */}
                 <button
                   id="btn-reverse-translate"
+                  type="button"
                   onClick={handleReverseTranslation}
                   disabled={!translatedText}
                   title="Vérifier par traduction inverse"
@@ -580,6 +692,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 {/* Toggle Phonetics */}
                 <button
                   id="btn-toggle-phonetics"
+                  type="button"
                   onClick={() => setWithPhonetics(!withPhonetics)}
                   title="Activer la transcription phonétique (IPA / Romaji / Pinyin)"
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 ${
@@ -595,6 +708,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                 {/* Syntax Inspector Button */}
                 <button
                   id="btn-open-syntax-inspector"
+                  type="button"
                   onClick={handleOpenSyntaxInspector}
                   disabled={!sourceText || !translatedText}
                   title="Ouvrir l'inspecteur de syntaxe et grammaire"
@@ -639,3 +753,4 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     </div>
   );
 };
+

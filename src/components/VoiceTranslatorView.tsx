@@ -20,6 +20,7 @@ import {
   createSpeechRecognizer,
   speakTextWithBrowser,
   playRawPcmAudio,
+  fetchWithExponentialBackoff,
 } from '../utils/audio';
 
 interface VoiceTranslatorViewProps {
@@ -72,7 +73,7 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
     if (!textToTranslate.trim()) return;
     setIsTranslating(true);
     try {
-      const res = await fetch('/api/translate', {
+      const res = await fetchWithExponentialBackoff('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,11 +121,11 @@ export const VoiceTranslatorView: React.FC<VoiceTranslatorViewProps> = ({ onSave
     if (!text) return;
     setIsPlayingAudio(true);
     try {
-      const res = await fetch('/api/tts', {
+      const res = await fetchWithExponentialBackoff('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice: 'Kore' }),
-      });
+      }, 1, 500);
       const data = await res.json();
       if (data.audioBase64) {
         await playRawPcmAudio(data.audioBase64, data.sampleRate || 24000);

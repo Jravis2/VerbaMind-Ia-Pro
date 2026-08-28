@@ -21,7 +21,7 @@ import { ToneStyle, HistoryItem, OcrTranslationResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
 import { ToneSelector } from './ToneSelector';
-import { speakTextWithBrowser } from '../utils/audio';
+import { speakTextWithBrowser, fetchWithExponentialBackoff } from '../utils/audio';
 
 interface ARLiveCameraViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -47,6 +47,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const liveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isAnalyzingRef = useRef(false);
+  const lastScanTimeRef = useRef<number>(0);
 
   const targetLangObj =
     LANGUAGES_DATABASE.find((l) => l.code === targetLang) || {
@@ -118,20 +119,29 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
   // Process a frame or image with Gemini OCR
   const analyzeImageFrame = useCallback(
     async (base64Image: string, isFromLiveStream = false) => {
+      const now = Date.now();
       if (isAnalyzingRef.current && isFromLiveStream) return;
+      if (isFromLiveStream && now - lastScanTimeRef.current < 3500) return;
+
+      lastScanTimeRef.current = now;
       isAnalyzingRef.current = true;
       setIsLoading(true);
 
       try {
-        const res = await fetch('/api/ocr-translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image: base64Image,
-            targetLang,
-            tone,
-          }),
-        });
+        const res = await fetchWithExponentialBackoff(
+          '/api/ocr-translate',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: base64Image,
+              targetLang,
+              tone,
+            }),
+          },
+          2,
+          1000
+        );
 
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
@@ -139,6 +149,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
 
         const data: OcrTranslationResponse = await res.json();
         setOcrResult(data);
+        setErrorMessage(null);
 
         if (data.translatedText && !isFromLiveStream) {
           onSaveHistory({
@@ -153,7 +164,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
       } catch (err: any) {
         console.error('OCR analysis error:', err);
         if (!isFromLiveStream) {
-          setErrorMessage("Échec de l'analyse visuelle de l'image.");
+          setErrorMessage("Échec temporaire de l'analyse OCR. Veuillez réessayer.");
         }
       } finally {
         isAnalyzingRef.current = false;
@@ -175,7 +186,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.85);
+    return canvas.toDataURL('image/jpeg', 0.80);
   }, []);
 
   // Single Frame Snapshot
@@ -188,7 +199,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
     }
   };
 
-  // Toggle Live AR Stream scanning (every 1.5s as per spec 2.B)
+  // Toggle Live AR Stream scanning (cadence optimisée à 4s)
   const toggleLiveScanning = () => {
     if (isLiveStreamScanning) {
       if (liveIntervalRef.current) {
@@ -207,7 +218,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
     }
   };
 
-  // Live Stream loop effect (1.5 seconds interval)
+  // Live Stream loop effect (4 seconds interval for high stability)
   useEffect(() => {
     if (isLiveStreamScanning && isCameraActive) {
       // Trigger first scan immediately
@@ -221,7 +232,7 @@ export const ARLiveCameraView: React.FC<ARLiveCameraViewProps> = ({ onSaveHistor
         if (frame) {
           analyzeImageFrame(frame, true);
         }
-      }, 1500);
+      }, 4000);
     } else {
       if (liveIntervalRef.current) {
         clearInterval(liveIntervalRef.current);

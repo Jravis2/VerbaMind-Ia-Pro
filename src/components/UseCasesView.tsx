@@ -3,7 +3,7 @@ import { Mail, FileText, Lightbulb, Subtitles, ArrowRight, Sparkles, Copy, Check
 import { UseCaseType, ToneStyle, HistoryItem } from '../types';
 import { USE_CASE_PRESETS, LANGUAGES_DATABASE } from '../data/languages';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
-import { speakTextWithBrowser } from '../utils/audio';
+import { speakTextWithBrowser, fetchWithExponentialBackoff } from '../utils/audio';
 
 interface UseCasesViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -58,7 +58,7 @@ export const UseCasesView: React.FC<UseCasesViewProps> = ({ onSaveHistory, onOpe
     if (!inputText.trim()) return;
     setIsLoading(true);
     try {
-      const res = await fetch('/api/translate', {
+      const res = await fetchWithExponentialBackoff('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

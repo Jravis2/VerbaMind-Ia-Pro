@@ -2,12 +2,12 @@
  * Audio and Network utilities for VerbaMind AI Pro
  */
 
-// Exponential backoff fetcher for network resilience
+// Exponential backoff fetcher for network resilience and rate-limit handling
 export async function fetchWithExponentialBackoff(
   url: string,
   options: RequestInit,
-  maxRetries = 4,
-  baseDelayMs = 1000,
+  maxRetries = 3,
+  baseDelayMs = 1200,
   signal?: AbortSignal
 ): Promise<Response> {
   let attempt = 0;
@@ -17,9 +17,16 @@ export async function fetchWithExponentialBackoff(
         throw new DOMException('Aborted', 'AbortError');
       }
       const response = await fetch(url, { ...options, signal });
-      if (!response.ok && attempt < maxRetries && response.status >= 500) {
-        throw new Error(`Server error HTTP ${response.status}`);
+      
+      // If rate limited (429) or temporary server high demand (503/500), retry with backoff
+      if ((response.status === 429 || response.status === 503 || response.status >= 500) && attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
+        console.warn(`[VerbaMind Network] Status ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${Math.round(delay)}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt++;
+        continue;
       }
+      
       return response;
     } catch (error: any) {
       if (error?.name === 'AbortError' || signal?.aborted) {
@@ -28,9 +35,8 @@ export async function fetchWithExponentialBackoff(
       if (attempt >= maxRetries) {
         throw error;
       }
-      // Calculate delay: 1s, 2s, 4s, 8s, 16s...
-      const delay = baseDelayMs * Math.pow(2, attempt);
-      console.warn(`[VerbaMind Network] Request failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`);
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
+      console.warn(`[VerbaMind Network] Request failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${Math.round(delay)}ms...`, error);
       await new Promise((resolve) => setTimeout(resolve, delay));
       attempt++;
     }
@@ -84,30 +90,84 @@ export function playRawPcmAudio(base64PcmData: string, sampleRate = 24000): Prom
   });
 }
 
-// Browser SpeechSynthesis fallback with language mapping
+// Browser SpeechSynthesis utility with enhanced voice matching
+export function stopBrowserSpeech(): void {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 export function speakTextWithBrowser(text: string, langCode = 'fr'): Promise<void> {
   return new Promise((resolve) => {
-    if (!('speechSynthesis' in window)) {
-      console.warn('SpeechSynthesis is not supported in this browser.');
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      console.warn('SpeechSynthesis is not supported in this browser environment.');
       return resolve();
     }
 
+    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = langCode;
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
 
-    // Try to find matching voice
-    const voices = window.speechSynthesis.getVoices();
-    const match = voices.find((v) => v.lang.startsWith(langCode) || v.lang.includes(langCode));
-    if (match) {
-      utterance.voice = match;
+    if (!text || text.trim() === '') {
+      return resolve();
     }
 
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Normalize language tag (e.g., 'en' -> 'en-US', 'fr' -> 'fr-FR', 'es' -> 'es-ES')
+    const primaryLang = langCode.split('-')[0].toLowerCase();
+    utterance.lang = langCode;
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+
+    const findVoiceAndSpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        // Priority 1: Exact code match (e.g., 'es-ES' or 'en-US')
+        let matchedVoice = voices.find((v) => v.lang.toLowerCase() === langCode.toLowerCase());
+        
+        // Priority 2: Matching primary language prefix (e.g., 'es' matches 'es-MX' or 'es-ES')
+        if (!matchedVoice) {
+          matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(primaryLang));
+        }
+
+        // Priority 3: Contains language code
+        if (!matchedVoice) {
+          matchedVoice = voices.find((v) => v.lang.toLowerCase().includes(primaryLang));
+        }
+
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
+        }
+      }
+
+      utterance.onend = () => resolve();
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis utterance event error:', e);
+        resolve();
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('SpeechSynthesis speak failed:', err);
+        resolve();
+      }
+    };
+
+    // If voices are already loaded
+    if (window.speechSynthesis.getVoices().length > 0) {
+      findVoiceAndSpeak();
+    } else {
+      // Voices load asynchronously in some browsers (Chrome / Safari)
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null;
+        findVoiceAndSpeak();
+      };
+      // Fallback timeout in case onvoiceschanged does not fire
+      setTimeout(() => {
+        findVoiceAndSpeak();
+      }, 150);
+    }
   });
 }
 

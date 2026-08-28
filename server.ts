@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { GoogleGenAI, Modality, Type } from '@google/genai';
+import { GoogleGenAI, Modality, Type, ThinkingLevel } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
@@ -24,6 +24,60 @@ function getGeminiClient(): GoogleGenAI {
     });
   }
   return aiClient;
+}
+
+// Resilient helper to call Gemini with model fallback if a model is unavailable or rate-limited
+async function generateContentWithFallback(
+  options: {
+    contents: any;
+    config?: any;
+    preferredModel?: string;
+  }
+) {
+  const ai = getGeminiClient();
+  const models = [
+    options.preferredModel || 'gemini-3.7-flash',
+    'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
+  ];
+
+  let lastError: any = null;
+
+  for (const model of models) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: options.contents,
+        config: {
+          ...options.config,
+          ...(model.startsWith('gemini-3')
+            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+            : {}),
+        },
+      });
+      return response;
+    } catch (err: any) {
+      lastError = err;
+      const isQuotaOrUnavailable =
+        err?.status === 429 ||
+        err?.status === 503 ||
+        err?.message?.includes('429') ||
+        err?.message?.includes('503') ||
+        err?.message?.includes('RESOURCE_EXHAUSTED') ||
+        err?.message?.includes('UNAVAILABLE');
+
+      console.warn(`[VerbaMind AI] Model ${model} encountered error (isQuotaOrUnavailable=${isQuotaOrUnavailable}):`, err?.message || err);
+
+      // If rate limited or unavailable, try next model in fallback list
+      if (isQuotaOrUnavailable) {
+        continue;
+      }
+      // For other client errors, rethrow or try next
+      continue;
+    }
+  }
+
+  throw lastError || new Error('All model attempts failed');
 }
 
 async function startServer() {
@@ -79,22 +133,24 @@ Core Directives:
 4. Use-case context: ${useCase}
 5. Language Coverage: You have master-level fluency across 200+ living languages (French, English, Arabic, Chinese, Japanese, Wolof, Swahili, etc.), ancient/dead languages (Classical Latin, Ancient Greek, Sanskrit, Ancient Egyptian hieroglyphs phonetic, Sumerian, Akkadian, Old Norse, Gothic, etc.), regional languages (Breton, Occitan, Basque, Catalan, Welsh, Gaelic, etc.), and constructed languages (Esperanto, Klingon, Interlingua, Lojban, Quenya, Sindarin, High Valyrian, etc.).`;
 
-      if (withPhonetic) {
-        // Structured response when phonetics/transliteration are requested
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
-          contents: `Translate and restructure this source text from ${sourceLang} to ${targetLang}.
+      if (sourceLang === 'auto' || withPhonetic) {
+        // Structured response for auto-detection and/or phonetics/transliteration
+        const response = await generateContentWithFallback({
+          preferredModel: 'gemini-3.7-flash',
+          contents: `Translate and restructure this source text to target language "${targetLang}".
+Source language setting: "${sourceLang}" (detect automatically if set to "auto").
 Source text:
 """${text}"""`,
           config: {
             systemInstruction,
-            temperature: 0.2,
+            temperature: 0.15,
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
               properties: {
                 translatedText: { type: Type.STRING, description: 'The translated and grammatically restructured text' },
-                detectedSourceLang: { type: Type.STRING, description: 'The detected source language name or code' },
+                detectedSourceLang: { type: Type.STRING, description: 'Detected language code (e.g., "fr", "en", "es", "de", "ja", "zh", "la")' },
+                detectedSourceLangName: { type: Type.STRING, description: 'Full human-readable name of the detected language in French (e.g., "Espagnol", "Anglais", "Latin", "Japonais")' },
                 phonetic: { type: Type.STRING, description: 'Phonetic transcription, Romanization, Romaji, Pinyin, or IPA if applicable' },
                 detectedGrammarIssues: {
                   type: Type.ARRAY,
@@ -102,7 +158,7 @@ Source text:
                   description: 'Brief list of grammatical/typo fixes made from the source text',
                 },
               },
-              required: ['translatedText'],
+              required: ['translatedText', 'detectedSourceLang'],
             },
           },
         });
@@ -117,15 +173,16 @@ Source text:
 
         return res.json({
           translatedText: parsedResult.translatedText || '',
-          detectedSourceLang: parsedResult.detectedSourceLang,
-          phonetic: parsedResult.phonetic,
+          detectedSourceLang: parsedResult.detectedSourceLang || 'fr',
+          detectedSourceLangName: parsedResult.detectedSourceLangName || '',
+          phonetic: parsedResult.phonetic || '',
           detectedGrammarIssues: parsedResult.detectedGrammarIssues || [],
           latencyMs,
         });
       } else {
-        // Ultra-low latency raw text mode (< 300ms)
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
+        // Ultra-low latency raw text mode (< 250ms)
+        const response = await generateContentWithFallback({
+          preferredModel: 'gemini-3.7-flash',
           contents: `Source text to translate and restructure into target language "${targetLang}" (Source language: ${sourceLang}):
 ${text}`,
           config: {
@@ -139,7 +196,7 @@ ${text}`,
 
         return res.json({
           translatedText,
-          detectedSourceLang: sourceLang === 'auto' ? undefined : sourceLang,
+          detectedSourceLang: sourceLang,
           latencyMs,
         });
       }
@@ -162,8 +219,6 @@ ${text}`,
         return res.status(400).json({ error: 'Image data (base64) is required' });
       }
 
-      const ai = getGeminiClient();
-
       // Extract mime type and base64 data
       let mimeType = 'image/jpeg';
       let base64Data = image;
@@ -176,8 +231,8 @@ ${text}`,
         }
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+      const response = await generateContentWithFallback({
+        preferredModel: 'gemini-3.7-flash',
         contents: {
           parts: [
             {
@@ -267,8 +322,6 @@ ${text}`,
         return res.status(400).json({ error: 'Audio data (base64) is required' });
       }
 
-      const ai = getGeminiClient();
-
       let base64Audio = audio;
       let cleanMime = mimeType;
       if (audio.startsWith('data:')) {
@@ -279,8 +332,8 @@ ${text}`,
         }
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-transcribe',
+      const response = await generateContentWithFallback({
+        preferredModel: 'gemini-3.5-transcribe',
         contents: {
           parts: [
             {
@@ -374,10 +427,9 @@ ${text}`,
   app.post('/api/explain-syntax', async (req, res) => {
     try {
       const { sourceText, targetText, sourceLang, targetLang, tone } = req.body;
-      const ai = getGeminiClient();
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+      const response = await generateContentWithFallback({
+        preferredModel: 'gemini-3.7-flash',
         contents: `Provide a detailed linguistic, grammatical, and syntactical analysis comparing the source text and translated target text.
 Source (${sourceLang}): "${sourceText}"
 Target (${targetLang}, Tone: ${tone}): "${targetText}"`,
