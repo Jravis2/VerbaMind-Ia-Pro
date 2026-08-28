@@ -27,13 +27,13 @@ export const ToneSelector: React.FC<ToneSelectorProps> = ({ currentTone, onChang
   };
 
   return (
-    <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-[#0c152e]/80 border border-indigo-500/20 rounded-2xl backdrop-blur-md">
-      <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-300">
+    <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2 theme-card rounded-2xl">
+      <div className="flex items-center gap-2 px-2 text-xs font-semibold theme-text-muted shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
         <span>Style & Tonalité :</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5 w-full sm:w-auto">
         {TONE_OPTIONS.map((tone) => {
           const Icon = getIcon(tone.id);
           const isSelected = currentTone === tone.id;
@@ -43,14 +43,14 @@ export const ToneSelector: React.FC<ToneSelectorProps> = ({ currentTone, onChang
               id={`btn-tone-${tone.id}`}
               onClick={() => onChangeTone(tone.id)}
               title={tone.description}
-              className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 ${
+              className={`group relative flex items-center justify-center sm:justify-start gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 ${
                 isSelected
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/50'
-                  : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/50'
+                  ? 'theme-accent-btn shadow-md ring-1 ring-white/20'
+                  : 'theme-card-subtle theme-text-muted hover:theme-text-primary border'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-200' : 'text-slate-400 group-hover:text-indigo-300'}`} />
-              <span className="whitespace-nowrap">{tone.label}</span>
+              <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'theme-text-muted group-hover:text-indigo-300'}`} />
+              <span className="truncate">{tone.label}</span>
             </button>
           );
         })}

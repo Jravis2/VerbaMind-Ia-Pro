@@ -40,44 +40,44 @@ export const Header: React.FC<HeaderProps> = ({
 
   const modes: { id: AppMode; label: string; icon: any; badge?: string }[] = [
     { id: 'text', label: t.tabText, icon: Layers },
-    { id: 'ar_camera', label: t.tabCamera, icon: Camera, badge: '1.5s Live' },
+    { id: 'ar_camera', label: t.tabCamera, icon: Camera, badge: 'Live' },
     { id: 'voice', label: t.tabVoice, icon: Mic },
     { id: 'use_cases', label: t.tabUseCases, icon: Briefcase },
   ];
 
   return (
-    <header className="w-full border-b border-indigo-500/20 bg-[#070d1e]/90 backdrop-blur-xl sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 gap-4">
+    <header className="w-full border-b theme-header sticky top-0 z-40 max-w-full">
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-18 gap-2 sm:gap-4">
           {/* Logo & Brand Identity */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="relative">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-lg shadow-indigo-600/40 ring-2 ring-indigo-400/30">
-                <Sparkles className="w-5 h-5" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-lg shadow-indigo-600/40 ring-2 ring-indigo-400/30">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
               </span>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black text-white tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">
+            <div className="truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-base sm:text-lg font-black theme-text-primary tracking-tight truncate">
                   {t.appName}
                 </h1>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                   PRO
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+              <p className="text-[10px] sm:text-[11px] theme-text-muted font-medium hidden md:block truncate">
                 {t.appSubtitle}
               </p>
             </div>
           </div>
 
-          {/* Navigation Mode Tabs */}
-          <nav className="hidden md:flex items-center gap-1.5 p-1.5 bg-[#0b142e] border border-slate-800 rounded-2xl">
+          {/* Navigation Mode Tabs (Desktop & Tablets >= 768px) */}
+          <nav className="hidden md:flex items-center gap-1 p-1 theme-card-subtle border rounded-2xl max-w-full shrink">
             {modes.map((mode) => {
               const Icon = mode.icon;
               const isActive = currentMode === mode.id;
@@ -86,16 +86,16 @@ export const Header: React.FC<HeaderProps> = ({
                   key={mode.id}
                   id={`nav-tab-${mode.id}`}
                   onClick={() => onChangeMode(mode.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 lg:gap-2 px-2.5 lg:px-3.5 py-1.5 lg:py-2 rounded-xl text-xs font-bold transition-all duration-200 whitespace-nowrap ${
                     isActive
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/40 ring-1 ring-indigo-400/40'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                      ? 'theme-accent-btn shadow-md ring-1 ring-white/20'
+                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-200' : 'text-slate-400'}`} />
-                  <span>{mode.label}</span>
+                  <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${isActive ? 'text-white' : 'theme-text-muted'}`} />
+                  <span className="truncate">{mode.label}</span>
                   {mode.badge && (
-                    <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30 hidden lg:inline">
                       {mode.badge}
                     </span>
                   )}
@@ -105,35 +105,23 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Right Action Widgets */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* Speed & Lang Badges */}
-            <div className="hidden xl:flex items-center gap-2">
-              <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                <Zap className="w-3 h-3 text-emerald-400" />
-                <span>{t.debounceBadge}</span>
-              </span>
-              <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
-                <Globe className="w-3 h-3 text-indigo-400" />
-                <span>{t.languagesBadge}</span>
-              </span>
-            </div>
-
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Network Online / Offline Status Badge */}
             <NetworkStatusBadge
               isOnline={isOnline}
               onRefreshCheck={onCheckConnection}
             />
 
-            {/* Comprehensive Settings Button (Replacing Github + ApiKey buttons) */}
+            {/* Comprehensive Settings Button */}
             <button
               id="btn-open-settings-modal"
               onClick={onOpenSettings}
               title={t.settings}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600/30 to-cyan-600/20 hover:from-indigo-600/50 hover:to-cyan-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/50 group"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-bold transition-all shadow-md group"
             >
-              <Settings className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform duration-300" />
-              <span>{t.settings}</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 hidden sm:inline">
+              <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:rotate-45 transition-transform duration-300 shrink-0" />
+              <span className="hidden sm:inline">{t.settings}</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
                 50+
               </span>
             </button>
@@ -143,12 +131,12 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-open-history-header"
               onClick={onOpenHistory}
               title={t.history}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0e183a] hover:bg-indigo-600/30 border border-indigo-500/30 text-white text-xs font-semibold transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-semibold transition-all shadow-sm"
             >
-              <History className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">{t.history}</span>
+              <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
+              <span className="hidden md:inline">{t.history}</span>
               {historyCount > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-bold">
+                <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-bold">
                   {historyCount}
                 </span>
               )}
@@ -156,26 +144,28 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Navigation Tabs */}
-        <div className="md:hidden flex items-center justify-between overflow-x-auto py-2.5 border-t border-slate-800/60 gap-1 scrollbar-none">
-          {modes.map((mode) => {
-            const Icon = mode.icon;
-            const isActive = currentMode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                onClick={() => onChangeMode(mode.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white bg-[#0b142e]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{mode.label}</span>
-              </button>
-            );
-          })}
+        {/* Mobile / Small Screen Navigation Tabs (100% width grid, never overflows) */}
+        <div className="md:hidden w-full pb-2 pt-1 border-t theme-card-subtle">
+          <div className="grid grid-cols-4 gap-1 w-full">
+            {modes.map((mode) => {
+              const Icon = mode.icon;
+              const isActive = currentMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => onChangeMode(mode.id)}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-[11px] font-bold transition-all text-center ${
+                    isActive
+                      ? 'theme-accent-btn shadow-md'
+                      : 'theme-card-subtle theme-text-muted hover:theme-text-primary'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate max-w-full text-[10px] sm:text-xs">{mode.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </header>

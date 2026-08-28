@@ -14,6 +14,7 @@ import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
 import { SettingsModal } from './components/SettingsModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { useNetworkStatus } from './utils/useNetworkStatus';
+import { useAutoViewport } from './utils/useAutoViewport';
 import { HistoryItem, ToneStyle } from './types';
 import {
   AppSettings,
@@ -32,6 +33,9 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings());
+
+  // Automatic screen size & viewport monitor
+  const viewport = useAutoViewport();
 
   // Apply theme and initialize on mount
   useEffect(() => {
@@ -159,7 +163,7 @@ export default function App() {
       />
 
       {/* Main View Area */}
-      <main className="relative z-10 flex-1 px-4 sm:px-6 lg:px-8 py-6 flex flex-col items-center">
+      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-2 xs:px-3 sm:px-6 lg:px-8 py-3 sm:py-6 flex flex-col items-center">
         {currentMode === 'text' && (
           <TextTranslatorView
             onSaveHistory={handleSaveHistory}
