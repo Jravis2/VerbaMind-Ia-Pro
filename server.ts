@@ -26,7 +26,7 @@ function getGeminiClient(): GoogleGenAI {
   return aiClient;
 }
 
-// Resilient helper to call Gemini with model fallback if a model is unavailable or rate-limited
+// Resilient helper to call Gemini with multi-model fallback cascade
 async function generateContentWithFallback(
   options: {
     contents: any;
@@ -36,48 +36,46 @@ async function generateContentWithFallback(
 ) {
   const ai = getGeminiClient();
   const models = [
-    options.preferredModel || 'gemini-3.7-flash',
-    'gemini-flash-latest',
+    options.preferredModel || 'gemini-3.6-flash',
+    'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
+    'gemini-flash-latest',
   ];
 
+  // Remove duplicates while preserving priority order
+  const uniqueModels = Array.from(new Set(models));
   let lastError: any = null;
 
-  for (const model of models) {
+  for (const model of uniqueModels) {
     try {
+      const thinkingConfig = model === 'gemini-3.1-flash-lite'
+        ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+        : model.startsWith('gemini-3')
+        ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+        : {};
+
       const response = await ai.models.generateContent({
         model,
         contents: options.contents,
         config: {
           ...options.config,
-          ...(model.startsWith('gemini-3')
-            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
-            : {}),
+          ...thinkingConfig,
         },
       });
-      return response;
+
+      if (response && response.text) {
+        return response;
+      }
     } catch (err: any) {
       lastError = err;
-      const isQuotaOrUnavailable =
-        err?.status === 429 ||
-        err?.status === 503 ||
-        err?.message?.includes('429') ||
-        err?.message?.includes('503') ||
-        err?.message?.includes('RESOURCE_EXHAUSTED') ||
-        err?.message?.includes('UNAVAILABLE');
-
-      console.warn(`[VerbaMind AI] Model ${model} encountered error (isQuotaOrUnavailable=${isQuotaOrUnavailable}):`, err?.message || err);
-
-      // If rate limited or unavailable, try next model in fallback list
-      if (isQuotaOrUnavailable) {
-        continue;
-      }
-      // For other client errors, rethrow or try next
+      // Log clean diagnostic line and continue to next model in cascade
+      console.warn(`[VerbaMind AI] Model "${model}" hit transient condition (${err?.status || err?.code || 'error'}), failing over to next model.`);
       continue;
     }
   }
 
-  throw lastError || new Error('All model attempts failed');
+  throw lastError || new Error('All model fallback attempts failed');
 }
 
 async function startServer() {
@@ -136,7 +134,7 @@ Core Directives:
       if (sourceLang === 'auto' || withPhonetic) {
         // Structured response for auto-detection and/or phonetics/transliteration
         const response = await generateContentWithFallback({
-          preferredModel: 'gemini-3.7-flash',
+          preferredModel: 'gemini-3.6-flash',
           contents: `Translate and restructure this source text to target language "${targetLang}".
 Source language setting: "${sourceLang}" (detect automatically if set to "auto").
 Source text:
@@ -182,7 +180,7 @@ Source text:
       } else {
         // Ultra-low latency raw text mode (< 250ms)
         const response = await generateContentWithFallback({
-          preferredModel: 'gemini-3.7-flash',
+          preferredModel: 'gemini-3.6-flash',
           contents: `Source text to translate and restructure into target language "${targetLang}" (Source language: ${sourceLang}):
 ${text}`,
           config: {
@@ -232,7 +230,7 @@ ${text}`,
       }
 
       const response = await generateContentWithFallback({
-        preferredModel: 'gemini-3.7-flash',
+        preferredModel: 'gemini-3.6-flash',
         contents: {
           parts: [
             {
@@ -429,7 +427,7 @@ ${text}`,
       const { sourceText, targetText, sourceLang, targetLang, tone } = req.body;
 
       const response = await generateContentWithFallback({
-        preferredModel: 'gemini-3.7-flash',
+        preferredModel: 'gemini-3.6-flash',
         contents: `Provide a detailed linguistic, grammatical, and syntactical analysis comparing the source text and translated target text.
 Source (${sourceLang}): "${sourceText}"
 Target (${targetLang}, Tone: ${tone}): "${targetText}"`,
