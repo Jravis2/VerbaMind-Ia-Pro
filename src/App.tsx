@@ -11,12 +11,17 @@ import { VoiceTranslatorView } from './components/VoiceTranslatorView';
 import { UseCasesView } from './components/UseCasesView';
 import { HistoryModal } from './components/HistoryModal';
 import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
-import { ApiKeyModal } from './components/ApiKeyModal';
+import { SettingsModal } from './components/SettingsModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { useNetworkStatus } from './utils/useNetworkStatus';
-import { getStoredApiKey } from './services/clientGemini';
 import { HistoryItem, ToneStyle } from './types';
-import { Sparkles, Shield, Cpu, Zap, Globe, Layers, BookOpen } from 'lucide-react';
+import {
+  AppSettings,
+  loadStoredSettings,
+  applyThemeToDOM,
+} from './utils/appSettings';
+import { I18N_TRANSLATIONS } from './data/i18n';
+import { Sparkles, Cpu, Zap, Globe } from 'lucide-react';
 
 const LOCAL_STORAGE_HISTORY_KEY = 'verbamind_history_v1';
 
@@ -24,13 +29,16 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('text');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(loadStoredSettings());
 
+  // Apply theme and initialize on mount
   useEffect(() => {
-    setHasApiKey(Boolean(getStoredApiKey()));
-  }, [isApiKeyModalOpen]);
+    const loaded = loadStoredSettings();
+    setSettings(loaded);
+    applyThemeToDOM(loaded);
+  }, []);
 
   // Network Status Hook
   const {
@@ -69,7 +77,8 @@ export default function App() {
         timestamp: Date.now(),
         isFavorite: false,
       };
-      const updated = [newItem, ...prev].slice(0, 100);
+      const limit = settings.historyAutoSaveLimit || 100;
+      const updated = [newItem, ...prev].slice(0, limit);
       try {
         localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(updated));
       } catch (e) {
@@ -110,26 +119,34 @@ export default function App() {
     setCurrentMode('text');
   };
 
+  const handleSettingsChanged = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    applyThemeToDOM(newSettings);
+  };
+
+  const t = I18N_TRANSLATIONS[settings.appLanguage] || I18N_TRANSLATIONS.fr;
+
   return (
-    <div className="min-h-screen bg-[#060b19] text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden transition-colors duration-300">
       {/* Ambient background glow effects */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-indigo-600/10 rounded-full filter blur-[140px]"></div>
-        <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] bg-cyan-500/8 rounded-full filter blur-[140px]"></div>
-        <div className="absolute bottom-10 left-10 w-[450px] h-[450px] bg-violet-600/8 rounded-full filter blur-[140px]"></div>
-      </div>
+      {settings.backgroundParticles && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-indigo-600/10 rounded-full filter blur-[140px]" />
+          <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] bg-cyan-500/8 rounded-full filter blur-[140px]" />
+          <div className="absolute bottom-10 left-10 w-[450px] h-[450px] bg-violet-600/8 rounded-full filter blur-[140px]" />
+        </div>
+      )}
 
       {/* Top Header */}
       <Header
         currentMode={currentMode}
         onChangeMode={(mode) => setCurrentMode(mode)}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
-        onOpenGitHubGuide={() => setIsGitHubGuideOpen(true)}
-        onOpenApiKeySettings={() => setIsApiKeyModalOpen(true)}
-        hasApiKey={hasApiKey}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
         historyCount={history.length}
         isOnline={isOnline}
         onCheckConnection={checkConnection}
+        appLanguage={settings.appLanguage}
       />
 
       {/* Online / Offline Status Warning Banner */}
@@ -174,7 +191,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modern Technical Footer */}
+      {/* Technical Footer */}
       <footer className="relative z-10 border-t border-slate-800/80 bg-[#060d21]/90 backdrop-blur-md py-6 px-4 sm:px-6 lg:px-8 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div className="flex items-center gap-2.5">
@@ -182,30 +199,30 @@ export default function App() {
               <Sparkles className="w-3.5 h-3.5" />
             </div>
             <div>
-              <span className="font-bold text-white">VerbaMind AI Pro</span>
-              <span className="text-slate-500 ml-2">Moteur de Compréhension Contextuelle & AR Visuel</span>
+              <span className="font-bold text-white">{t.appName} Pro</span>
+              <span className="text-slate-500 ml-2">{t.appSubtitle}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
             <span className="flex items-center gap-1">
               <Zap className="w-3 h-3 text-indigo-400" />
-              <span>Anti-Rebond 200ms</span>
+              <span>{settings.debounceDelay}ms Debounce</span>
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <Cpu className="w-3 h-3 text-cyan-400" />
-              <span>Gemini 2.5 Flash Engine</span>
+              <span>{settings.aiModel}</span>
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <Globe className="w-3 h-3 text-emerald-400" />
-              <span>+200 Langues (Vivantes, Mortes, Régionales, Construites)</span>
+              <span>+200 Langues</span>
             </span>
           </div>
 
           <div className="text-slate-400 text-right">
-            <span>&copy; {new Date().getFullYear()} VerbaMind AI Pro. Tous droits réservés.</span>
+            <span>&copy; {new Date().getFullYear()} {t.appName} Pro.</span>
           </div>
         </div>
       </footer>
@@ -220,16 +237,21 @@ export default function App() {
         onRestoreItem={handleRestoreItem}
       />
 
+      {/* 50+ Options Pro Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        onSettingsChanged={handleSettingsChanged}
+        onOpenGitHubGuide={() => {
+          setIsSettingsModalOpen(false);
+          setIsGitHubGuideOpen(true);
+        }}
+      />
+
       {/* GitHub Deployment Guide Modal */}
       <GitHubDeployGuideModal
         isOpen={isGitHubGuideOpen}
         onClose={() => setIsGitHubGuideOpen(false)}
-      />
-
-      {/* Gemini API Key / IA Settings Modal */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
       />
     </div>
   );

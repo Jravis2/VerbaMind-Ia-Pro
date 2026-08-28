@@ -8,10 +8,10 @@ import {
   History,
   Zap,
   Globe,
-  Github,
-  Key,
+  Settings,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
+import { I18N_TRANSLATIONS, UILanguage } from '../data/i18n';
 
 export type AppMode = 'text' | 'ar_camera' | 'voice' | 'use_cases';
 
@@ -19,30 +19,30 @@ interface HeaderProps {
   currentMode: AppMode;
   onChangeMode: (mode: AppMode) => void;
   onOpenHistory: () => void;
-  onOpenGitHubGuide?: () => void;
-  onOpenApiKeySettings?: () => void;
-  hasApiKey?: boolean;
+  onOpenSettings: () => void;
   historyCount: number;
   isOnline: boolean;
   onCheckConnection?: () => Promise<boolean>;
+  appLanguage?: UILanguage;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentMode,
   onChangeMode,
   onOpenHistory,
-  onOpenGitHubGuide,
-  onOpenApiKeySettings,
-  hasApiKey,
+  onOpenSettings,
   historyCount,
   isOnline,
   onCheckConnection,
+  appLanguage = 'fr',
 }) => {
+  const t = I18N_TRANSLATIONS[appLanguage] || I18N_TRANSLATIONS.fr;
+
   const modes: { id: AppMode; label: string; icon: any; badge?: string }[] = [
-    { id: 'text', label: 'Éditeur & Traduction Live', icon: Layers },
-    { id: 'ar_camera', label: 'AR Live Camera & OCR', icon: Camera, badge: '1.5s Live' },
-    { id: 'voice', label: 'Voix & Dictée IA', icon: Mic },
-    { id: 'use_cases', label: 'Cas d\'Usage Pro', icon: Briefcase },
+    { id: 'text', label: t.tabText, icon: Layers },
+    { id: 'ar_camera', label: t.tabCamera, icon: Camera, badge: '1.5s Live' },
+    { id: 'voice', label: t.tabVoice, icon: Mic },
+    { id: 'use_cases', label: t.tabUseCases, icon: Briefcase },
   ];
 
   return (
@@ -64,14 +64,14 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black text-white tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">
-                  VerbaMind AI
+                  {t.appName}
                 </h1>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                   PRO
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-                Traduction contextuelle, restructuration syntaxique & AR Live
+                {t.appSubtitle}
               </p>
             </div>
           </div>
@@ -110,11 +110,11 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="hidden xl:flex items-center gap-2">
               <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
                 <Zap className="w-3 h-3 text-emerald-400" />
-                <span>&lt;300ms Debounce</span>
+                <span>{t.debounceBadge}</span>
               </span>
               <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
                 <Globe className="w-3 h-3 text-indigo-400" />
-                <span>+200 Langues</span>
+                <span>{t.languagesBadge}</span>
               </span>
             </div>
 
@@ -124,45 +124,29 @@ export const Header: React.FC<HeaderProps> = ({
               onRefreshCheck={onCheckConnection}
             />
 
-            {/* API Key / IA Settings Button */}
-            {onOpenApiKeySettings && (
-              <button
-                id="btn-open-api-key-modal"
-                onClick={onOpenApiKeySettings}
-                title="Paramètres IA & Clé Gemini"
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all shadow-sm ${
-                  hasApiKey
-                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 border-emerald-500/40 text-emerald-300'
-                    : 'bg-[#0e183a] hover:bg-indigo-600/30 border-indigo-500/30 text-indigo-200'
-                }`}
-              >
-                <Key className={`w-4 h-4 ${hasApiKey ? 'text-emerald-400' : 'text-indigo-400'}`} />
-                <span className="hidden sm:inline">{hasApiKey ? 'Gemini IA' : 'Clé IA'}</span>
-              </button>
-            )}
-
-            {/* GitHub Pages Guide Button */}
-            {onOpenGitHubGuide && (
-              <button
-                id="btn-open-github-deploy-guide"
-                onClick={onOpenGitHubGuide}
-                title="Guide de déploiement GitHub Pages"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-semibold transition-all shadow-sm"
-              >
-                <Github className="w-4 h-4 text-indigo-400" />
-                <span className="hidden sm:inline">Publier GitHub</span>
-              </button>
-            )}
+            {/* Comprehensive Settings Button (Replacing Github + ApiKey buttons) */}
+            <button
+              id="btn-open-settings-modal"
+              onClick={onOpenSettings}
+              title={t.settings}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600/30 to-cyan-600/20 hover:from-indigo-600/50 hover:to-cyan-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/50 group"
+            >
+              <Settings className="w-4 h-4 text-cyan-400 group-hover:rotate-45 transition-transform duration-300" />
+              <span>{t.settings}</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 hidden sm:inline">
+                50+
+              </span>
+            </button>
 
             {/* History Toggle Button */}
             <button
               id="btn-open-history-header"
               onClick={onOpenHistory}
-              title="Ouvrir l'historique des traductions"
+              title={t.history}
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0e183a] hover:bg-indigo-600/30 border border-indigo-500/30 text-white text-xs font-semibold transition-all shadow-sm"
             >
               <History className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Historique</span>
+              <span className="hidden sm:inline">{t.history}</span>
               {historyCount > 0 && (
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-bold">
                   {historyCount}
