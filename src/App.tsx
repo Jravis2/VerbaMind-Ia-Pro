@@ -33,9 +33,79 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings());
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Automatic screen size & viewport monitor
   const viewport = useAutoViewport();
+
+  // Fullscreen event listener and F11 keyboard shortcut
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isDocFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isDocFs);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        handleToggleFullscreen();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    try {
+      const doc = document as any;
+      const docEl = document.documentElement as any;
+
+      if (!document.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement && !doc.msFullscreenElement) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          await docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      // Fallback for sandboxed iframes: toggle internal zen fullscreen state
+      console.info('Plein écran direct :', err);
+      setIsFullscreen((prev) => !prev);
+    }
+  };
 
   // Apply theme and initialize on mount
   useEffect(() => {
@@ -151,6 +221,8 @@ export default function App() {
         isOnline={isOnline}
         onCheckConnection={checkConnection}
         appLanguage={settings.appLanguage}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={handleToggleFullscreen}
       />
 
       {/* Online / Offline Status Warning Banner */}
@@ -171,6 +243,8 @@ export default function App() {
             initialTone={prefilledTone}
             isOnline={isOnline}
             settings={settings}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={handleToggleFullscreen}
           />
         )}
 

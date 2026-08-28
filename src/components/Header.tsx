@@ -3,6 +3,8 @@ import {
   Sparkles,
   History,
   Settings,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
 import { I18N_TRANSLATIONS, UILanguage } from '../data/i18n';
@@ -18,6 +20,8 @@ interface HeaderProps {
   isOnline: boolean;
   onCheckConnection?: () => Promise<boolean>;
   appLanguage?: UILanguage;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +31,8 @@ export const Header: React.FC<HeaderProps> = ({
   isOnline,
   onCheckConnection,
   appLanguage = 'fr',
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const t = I18N_TRANSLATIONS[appLanguage] || I18N_TRANSLATIONS.fr;
 
@@ -68,6 +74,29 @@ export const Header: React.FC<HeaderProps> = ({
               isOnline={isOnline}
               onRefreshCheck={onCheckConnection}
             />
+
+            {/* Direct Fullscreen Toggle Button */}
+            {onToggleFullscreen && (
+              <button
+                id="btn-toggle-fullscreen"
+                onClick={onToggleFullscreen}
+                title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre directement en plein écran (F11)"}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl theme-card border text-xs font-bold transition-all shadow-md group ${
+                  isFullscreen
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'theme-text-primary hover:border-indigo-500/50 hover:bg-indigo-500/10'
+                }`}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
+                ) : (
+                  <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
+                )}
+                <span className="hidden sm:inline">
+                  {isFullscreen ? "Fenêtré" : "Plein Écran"}
+                </span>
+              </button>
+            )}
 
             {/* Comprehensive Settings Button */}
             <button

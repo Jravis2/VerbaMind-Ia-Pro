@@ -15,6 +15,8 @@ import {
   Trash2,
   Layers,
   AlertTriangle,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { ToneStyle, HistoryItem, SyntaxAnalysisResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
@@ -39,6 +41,8 @@ interface TextTranslatorViewProps {
   initialTone?: ToneStyle;
   isOnline?: boolean;
   settings?: AppSettings;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 const QUICK_SOURCE_LANGS = [
@@ -63,6 +67,8 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   initialTone = 'natural',
   isOnline = true,
   settings,
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const [sourceText, setSourceText] = useState(initialSourceText);
   const [translatedText, setTranslatedText] = useState('');
@@ -579,6 +585,23 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
+
+              {/* Fullscreen Direct Button */}
+              {onToggleFullscreen && (
+                <button
+                  id="btn-fullscreen-source-card"
+                  type="button"
+                  onClick={onToggleFullscreen}
+                  title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
+                  className={`p-2 rounded-xl transition-all ${
+                    isFullscreen
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                  }`}
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              )}
             </div>
           </div>
 
@@ -681,7 +704,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
               </div>
             </div>
 
-            {/* Performance Latency & Status Badge */}
+            {/* Performance Latency & Status Badge & Fullscreen */}
             <div className="flex items-center gap-2 ml-auto">
               {isLoading ? (
                 <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse">
@@ -694,6 +717,22 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
                   <span>{latencyMs} ms</span>
                 </span>
               ) : null}
+
+              {onToggleFullscreen && (
+                <button
+                  id="btn-fullscreen-target-card"
+                  type="button"
+                  onClick={onToggleFullscreen}
+                  title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    isFullscreen
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                  }`}
+                >
+                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </div>
           </div>
 
