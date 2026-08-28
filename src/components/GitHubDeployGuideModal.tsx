@@ -143,16 +143,20 @@ export const GitHubDeployGuideModal: React.FC<GitHubDeployGuideModalProps> = ({
               </a>
 
               <div className="p-3 rounded-xl bg-[#080d1e] border border-slate-800 text-xs text-slate-300 space-y-1.5">
-                <div className="font-semibold text-white">Une fois sur la page :</div>
-                <div className="flex items-start gap-2">
-                  <span className="text-indigo-400 font-bold">•</span>
-                  <span>Dans la section <strong>Build and deployment &gt; Source</strong></span>
+                <div className="font-semibold text-white">Dans Build and deployment &gt; Source :</div>
+                <div className="p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-500/30 space-y-1">
+                  <div className="font-bold text-indigo-200">Option A (Recommandée - Par Branche) :</div>
+                  <div className="text-slate-300">
+                    1. Choisissez <strong className="text-white">« Deploy from a branch »</strong><br />
+                    2. Sélectionnez la branche <strong className="text-emerald-400">gh-pages</strong> et le dossier <strong className="text-white">/ (root)</strong><br />
+                    3. Appuyez sur <strong className="text-white">Save</strong>.
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-indigo-400 font-bold">•</span>
-                  <span>
-                    Sélectionnez simplement : <strong className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">GitHub Actions</strong>
-                  </span>
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1">
+                  <div className="font-bold text-slate-300">Option B (Directe) :</div>
+                  <div className="text-slate-300">
+                    Sélectionnez simplement <strong className="text-indigo-300">« GitHub Actions »</strong>.
+                  </div>
                 </div>
               </div>
             </div>

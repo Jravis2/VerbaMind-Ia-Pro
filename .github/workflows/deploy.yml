@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,6 +39,16 @@ jobs:
         run: npm run build:pages
         env:
           VITE_BASE_PATH: /VerbaMind-Ia-Pro/
+
+      - name: Ensure .nojekyll in dist
+        run: touch dist/.nojekyll
+
+      - name: Deploy to gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          clean: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
