@@ -10,6 +10,7 @@ import { ARLiveCameraView } from './components/ARLiveCameraView';
 import { VoiceTranslatorView } from './components/VoiceTranslatorView';
 import { UseCasesView } from './components/UseCasesView';
 import { HistoryModal } from './components/HistoryModal';
+import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
 import { HistoryItem, ToneStyle } from './types';
 import { Sparkles, Shield, Cpu, Zap, Globe, Layers, BookOpen } from 'lucide-react';
 
@@ -19,6 +20,7 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('text');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
 
   // States passed from UseCases to TextTranslator
   const [prefilledText, setPrefilledText] = useState('');
@@ -104,6 +106,7 @@ export default function App() {
         currentMode={currentMode}
         onChangeMode={(mode) => setCurrentMode(mode)}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
+        onOpenGitHubGuide={() => setIsGitHubGuideOpen(true)}
         historyCount={history.length}
       />
 
@@ -177,6 +180,12 @@ export default function App() {
         onToggleFavorite={handleToggleFavorite}
         onClearHistory={handleClearHistory}
         onRestoreItem={handleRestoreItem}
+      />
+
+      {/* GitHub Deployment Guide Modal */}
+      <GitHubDeployGuideModal
+        isOpen={isGitHubGuideOpen}
+        onClose={() => setIsGitHubGuideOpen(false)}
       />
     </div>
   );

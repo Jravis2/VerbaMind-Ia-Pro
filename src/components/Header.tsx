@@ -8,7 +8,7 @@ import {
   History,
   Zap,
   Globe,
-  HelpCircle,
+  Github,
 } from 'lucide-react';
 
 export type AppMode = 'text' | 'ar_camera' | 'voice' | 'use_cases';
@@ -17,6 +17,7 @@ interface HeaderProps {
   currentMode: AppMode;
   onChangeMode: (mode: AppMode) => void;
   onOpenHistory: () => void;
+  onOpenGitHubGuide?: () => void;
   historyCount: number;
 }
 
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentMode,
   onChangeMode,
   onOpenHistory,
+  onOpenGitHubGuide,
   historyCount,
 }) => {
   const modes: { id: AppMode; label: string; icon: any; badge?: string }[] = [
@@ -105,6 +107,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>+200 Langues</span>
               </span>
             </div>
+
+            {/* GitHub Pages Guide Button */}
+            {onOpenGitHubGuide && (
+              <button
+                id="btn-open-github-deploy-guide"
+                onClick={onOpenGitHubGuide}
+                title="Guide de déploiement GitHub Pages"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-semibold transition-all shadow-sm"
+              >
+                <Github className="w-4 h-4 text-indigo-400" />
+                <span className="hidden sm:inline">Publier GitHub</span>
+              </button>
+            )}
 
             {/* History Toggle Button */}
             <button
