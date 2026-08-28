@@ -79,3 +79,90 @@ export interface HistoryItem {
   isFavorite?: boolean;
   mode: 'text' | 'ocr' | 'live_camera' | 'voice';
 }
+
+// === NOUVELLES OPTIONS VOLET ROULANT IA PRO ===
+
+export type AIToolId =
+  | 'detector'
+  | 'humanizer'
+  | 'plagiarism'
+  | 'summarizer'
+  | 'paraphraser'
+  | 'grammar';
+
+export interface AIDetectionResponse {
+  aiScore: number; // 0-100%
+  humanScore: number; // 0-100%
+  verdict: 'likely_ai' | 'likely_human' | 'mixed';
+  verdictLabel: string;
+  perplexityLevel: 'Faible' | 'Modérée' | 'Élevée';
+  burstinessLevel: 'Faible' | 'Modérée' | 'Élevée';
+  sentences: {
+    text: string;
+    aiProbability: number;
+    flagged: boolean;
+    reason?: string;
+  }[];
+  analysisSummary: string;
+  keyIndicators: string[];
+}
+
+export interface AIHumanizerResponse {
+  humanizedText: string;
+  originalAiScore: number;
+  predictedHumanScore: number;
+  readabilityLevel: string;
+  improvementsMade: string[];
+  toneApplied: string;
+}
+
+export interface AIPlagiarismResponse {
+  originalityScore: number; // 0-100%
+  uniquenessRating: 'Excellente' | 'Bonne' | 'Modérée' | 'Faible';
+  matchesFound: {
+    phrase: string;
+    potentialSourceType: string;
+    similarity: number;
+    suggestion: string;
+  }[];
+  clichesDetected: string[];
+  recommendations: string[];
+  citationAdvice: string;
+}
+
+export interface AISummaryResponse {
+  summary: string;
+  keyPoints: string[];
+  readingTimeReduction: string;
+  wordCountOriginal: number;
+  wordCountSummary: number;
+  sentiment: string;
+}
+
+export interface AIParaphraseResponse {
+  paraphrasedText: string;
+  styleApplied: string;
+  alternatives: {
+    text: string;
+    nuance: string;
+  }[];
+  vocabularyEnhancements: {
+    original: string;
+    replacement: string;
+  }[];
+}
+
+export interface AIGrammarIssue {
+  original: string;
+  replacement: string;
+  category: 'orthographe' | 'grammaire' | 'accord' | 'conjugaison' | 'ponctuation' | 'style';
+  explanation: string;
+}
+
+export interface AIGrammarResponse {
+  correctedText: string;
+  errorCount: number;
+  issues: AIGrammarIssue[];
+  score: number; // 0-100
+  summary: string;
+}

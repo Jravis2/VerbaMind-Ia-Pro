@@ -22,6 +22,7 @@ import { ToneSelector } from './ToneSelector';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
 import { LanguageDropdown } from './LanguageDropdown';
 import { SyntaxInspectorModal } from './SyntaxInspectorModal';
+import { AIRollerShutter } from './AIRollerShutter';
 import {
   speakTextWithBrowser,
   stopBrowserSpeech,
@@ -86,6 +87,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   const [isSyntaxModalOpen, setIsSyntaxModalOpen] = useState(false);
   const [syntaxAnalysis, setSyntaxAnalysis] = useState<SyntaxAnalysisResponse | null>(null);
   const [isAnalyzingSyntax, setIsAnalyzingSyntax] = useState(false);
+  const [isRollerShutterOpen, setIsRollerShutterOpen] = useState(false);
 
   // Active in-flight AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -455,13 +457,27 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-5 animate-fade-in">
-      {/* Tone & Style Toolbar (hidden in Zen mode if requested) */}
-      {!settings?.zenFocusMode && (
-        <ToneSelector currentTone={tone} onChangeTone={(t) => setTone(t)} />
-      )}
+      {/* Volet Roulant IA Pro (Curtain Shutter with 6 100% Functional AI tools) */}
+      <AIRollerShutter
+        isOpen={isRollerShutterOpen}
+        onToggle={() => setIsRollerShutterOpen(!isRollerShutterOpen)}
+        editorText={sourceText || translatedText}
+        onApplyToEditor={(newText) => {
+          setSourceText(newText);
+          performTranslation(newText, tone, sourceLang, targetLang, withPhonetics);
+        }}
+      />
 
-      {/* Main Dual Translation Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* When Shutter is Closed: Display the Full Live Editor & Translation Workspace */}
+      {!isRollerShutterOpen && (
+        <div className="space-y-5 animate-fade-in">
+          {/* Tone & Style Toolbar (hidden in Zen mode if requested) */}
+          {!settings?.zenFocusMode && (
+            <ToneSelector currentTone={tone} onChangeTone={(t) => setTone(t)} />
+          )}
+
+          {/* Main Dual Translation Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Source Text Card */}
         <div className="flex flex-col theme-card rounded-2xl shadow-xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-indigo-500/40">
           {/* Card Header */}
@@ -806,6 +822,8 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
           </div>
         </div>
       </div>
+    </div>
+  )}
 
       {/* Modals */}
       <LanguageSelectorModal

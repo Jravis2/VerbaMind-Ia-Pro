@@ -1,13 +1,7 @@
 import React from 'react';
 import {
   Sparkles,
-  Layers,
-  Camera,
-  Mic,
-  Briefcase,
   History,
-  Zap,
-  Globe,
   Settings,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
@@ -16,8 +10,8 @@ import { I18N_TRANSLATIONS, UILanguage } from '../data/i18n';
 export type AppMode = 'text' | 'ar_camera' | 'voice' | 'use_cases';
 
 interface HeaderProps {
-  currentMode: AppMode;
-  onChangeMode: (mode: AppMode) => void;
+  currentMode?: AppMode;
+  onChangeMode?: (mode: AppMode) => void;
   onOpenHistory: () => void;
   onOpenSettings: () => void;
   historyCount: number;
@@ -27,8 +21,6 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentMode,
-  onChangeMode,
   onOpenHistory,
   onOpenSettings,
   historyCount,
@@ -37,13 +29,6 @@ export const Header: React.FC<HeaderProps> = ({
   appLanguage = 'fr',
 }) => {
   const t = I18N_TRANSLATIONS[appLanguage] || I18N_TRANSLATIONS.fr;
-
-  const modes: { id: AppMode; label: string; icon: any; badge?: string }[] = [
-    { id: 'text', label: t.tabText, icon: Layers },
-    { id: 'ar_camera', label: t.tabCamera, icon: Camera, badge: 'Live' },
-    { id: 'voice', label: t.tabVoice, icon: Mic },
-    { id: 'use_cases', label: t.tabUseCases, icon: Briefcase },
-  ];
 
   return (
     <header className="w-full border-b theme-header sticky top-0 z-40 max-w-full">
@@ -75,34 +60,6 @@ export const Header: React.FC<HeaderProps> = ({
               </p>
             </div>
           </div>
-
-          {/* Navigation Mode Tabs (Desktop & Tablets >= 768px) */}
-          <nav className="hidden md:flex items-center gap-1 p-1 theme-card-subtle border rounded-2xl max-w-full shrink">
-            {modes.map((mode) => {
-              const Icon = mode.icon;
-              const isActive = currentMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  id={`nav-tab-${mode.id}`}
-                  onClick={() => onChangeMode(mode.id)}
-                  className={`flex items-center gap-1.5 lg:gap-2 px-2.5 lg:px-3.5 py-1.5 lg:py-2 rounded-xl text-xs font-bold transition-all duration-200 whitespace-nowrap ${
-                    isActive
-                      ? 'theme-accent-btn shadow-md ring-1 ring-white/20'
-                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${isActive ? 'text-white' : 'theme-text-muted'}`} />
-                  <span className="truncate">{mode.label}</span>
-                  {mode.badge && (
-                    <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30 hidden lg:inline">
-                      {mode.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
 
           {/* Right Action Widgets */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
@@ -141,30 +98,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
-          </div>
-        </div>
-
-        {/* Mobile / Small Screen Navigation Tabs (100% width grid, never overflows) */}
-        <div className="md:hidden w-full pb-2 pt-1 border-t theme-card-subtle">
-          <div className="grid grid-cols-4 gap-1 w-full">
-            {modes.map((mode) => {
-              const Icon = mode.icon;
-              const isActive = currentMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  onClick={() => onChangeMode(mode.id)}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-[11px] font-bold transition-all text-center ${
-                    isActive
-                      ? 'theme-accent-btn shadow-md'
-                      : 'theme-card-subtle theme-text-muted hover:theme-text-primary'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate max-w-full text-[10px] sm:text-xs">{mode.label}</span>
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
