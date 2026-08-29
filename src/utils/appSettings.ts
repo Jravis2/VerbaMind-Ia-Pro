@@ -64,6 +64,7 @@ export interface AppSettings {
   alwaysShowPhonetics: boolean;
   reducedMotion: boolean;
   zenFocusMode: boolean;
+  buttonAnimations: boolean;
 
   // Category 7: Ergonomie & Traduction (6)
   debounceDelay: 150 | 300 | 500 | 800;
@@ -72,6 +73,8 @@ export interface AppSettings {
   confirmBeforeClear: boolean;
   keepScreenAwake: boolean;
   hapticFeedback: boolean;
+  readingProgressBar: boolean;
+  instantLanguageDetection: boolean;
 
   // Category 8: GitHub Pages & Données (6)
   historyAutoSaveLimit: 20 | 50 | 100 | 500;
@@ -134,6 +137,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysShowPhonetics: true,
   reducedMotion: false,
   zenFocusMode: false,
+  buttonAnimations: true,
 
   // Ergonomics & Translation
   debounceDelay: 300,
@@ -142,6 +146,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   confirmBeforeClear: false,
   keepScreenAwake: false,
   hapticFeedback: true,
+  readingProgressBar: true,
+  instantLanguageDetection: true,
 
   // GitHub Pages & Data
   historyAutoSaveLimit: 100,
@@ -281,6 +287,7 @@ export function applyThemeToDOM(settings: AppSettings): void {
   root.dataset.contrast = settings.highContrast ? 'high' : 'normal';
   root.dataset.borderWidth = settings.borderWidth;
   root.dataset.reducedMotion = settings.reducedMotion ? 'true' : 'false';
+  root.dataset.buttonAnimations = (settings.buttonAnimations && !settings.reducedMotion) ? 'true' : 'false';
   root.dataset.dyslexic = settings.dyslexicFont ? 'true' : 'false';
   root.dir = settings.rtlDirection ? 'rtl' : 'ltr';
 

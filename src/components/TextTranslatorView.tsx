@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowRightLeft,
   Copy,
@@ -17,6 +18,11 @@ import {
   AlertTriangle,
   Maximize2,
   Minimize2,
+  CheckCircle2,
+  Sliders,
+  Database,
+  Camera,
+  Crop,
 } from 'lucide-react';
 import { ToneStyle, HistoryItem, SyntaxAnalysisResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
@@ -32,8 +38,10 @@ import {
   createSpeechRecognizer,
 } from '../utils/audio';
 import { executeTranslation, executeSyntaxInspection } from '../services/translationService';
+import { saveToOfflineLexicon } from '../services/offlineStorageService';
 import { AppSettings, triggerHapticFeedback, playUiChime } from '../utils/appSettings';
 import { I18N_TRANSLATIONS } from '../data/i18n';
+import { detectLanguageInstant } from '../utils/languageDetector';
 
 interface TextTranslatorViewProps {
   onSaveHistory: (item: Omit<HistoryItem, 'id' | 'timestamp'>) => void;
@@ -43,6 +51,9 @@ interface TextTranslatorViewProps {
   settings?: AppSettings;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  onOpenOfflineLexicon?: () => void;
+  onTakePhoto?: () => void;
+  onTakeScreenshot?: () => void;
 }
 
 const QUICK_SOURCE_LANGS = [
@@ -69,6 +80,9 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   settings,
   isFullscreen = false,
   onToggleFullscreen,
+  onOpenOfflineLexicon,
+  onTakePhoto,
+  onTakeScreenshot,
 }) => {
   const [sourceText, setSourceText] = useState(initialSourceText);
   const [translatedText, setTranslatedText] = useState('');
@@ -77,9 +91,16 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   const [targetLang, setTargetLang] = useState<string>('en');
   const [detectedLangCode, setDetectedLangCode] = useState<string>('');
   const [detectedLangName, setDetectedLangName] = useState<string>('');
+  const [instantDetection, setInstantDetection] = useState<{
+    code: string;
+    name: string;
+    confidence: number;
+    flag: string;
+  } | null>(null);
   const [tone, setTone] = useState<ToneStyle>(initialTone);
   const [isLoading, setIsLoading] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isPlayingSourceAudio, setIsPlayingSourceAudio] = useState(false);
@@ -101,6 +122,7 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const t = I18N_TRANSLATIONS[settings?.appLanguage || 'fr'] || I18N_TRANSLATIONS.fr;
+  const btnAnim = settings?.buttonAnimations !== false;
 
   // Sync phonetics setting if changed externally
   useEffect(() => {
@@ -108,6 +130,32 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
       setWithPhonetics(settings.alwaysShowPhonetics);
     }
   }, [settings?.alwaysShowPhonetics]);
+
+  // Instant language detection as user types
+  useEffect(() => {
+    if (settings?.instantLanguageDetection === false || !sourceText.trim()) {
+      setInstantDetection(null);
+      return;
+    }
+
+    const detected = detectLanguageInstant(sourceText);
+    if (detected && detected.confidence > 0.4) {
+      const match = LANGUAGES_DATABASE.find((l) => l.code === detected.code);
+      setInstantDetection({
+        code: detected.code,
+        name: match?.name || detected.code,
+        confidence: Math.round(detected.confidence * 100),
+        flag: match?.flag || '🌐',
+      });
+
+      if (sourceLang === 'auto') {
+        setDetectedLangCode(detected.code);
+        setDetectedLangName(match?.name || detected.code);
+      }
+    } else {
+      setInstantDetection(null);
+    }
+  }, [sourceText, settings?.instantLanguageDetection, sourceLang]);
 
   // Language info helpers
   const sourceLangObj = sourceLang === 'auto'
@@ -193,7 +241,11 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
           try {
             navigator.clipboard.writeText(data.translatedText);
             setCopySuccess(true);
-            setTimeout(() => setCopySuccess(false), 2000);
+            setCopyToast('Traduction copiée automatiquement');
+            setTimeout(() => {
+              setCopySuccess(false);
+              setCopyToast(null);
+            }, 2200);
           } catch (e) {
             // Ignore clipboard permission issues
           }
@@ -311,13 +363,18 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
     setTargetLang(prevSource);
   };
 
-  // Copy to clipboard
+  // Visual Confirmation on Copy (Toast + Button Animation)
   const handleCopy = (text: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopySuccess(true);
-    if (settings?.uiSoundEffects) playUiChime('click');
-    if (settings?.hapticFeedback) triggerHapticFeedback(10);
-    setTimeout(() => setCopySuccess(false), 2000);
+    setCopyToast(`Traduction copiée ! (${text.length} car.)`);
+    if (settings?.uiSoundEffects) playUiChime('success');
+    if (settings?.hapticFeedback) triggerHapticFeedback(15);
+    setTimeout(() => {
+      setCopySuccess(false);
+      setCopyToast(null);
+    }, 2400);
   };
 
   // Clear text
@@ -461,13 +518,57 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
       ? 'leading-loose'
       : 'leading-relaxed';
 
+  // Reading length calculation for progress bar
+  const wordCount = sourceText.trim() ? sourceText.trim().split(/\s+/).length : 0;
+  const estimatedReadingTimeSec = Math.max(1, Math.round(wordCount / 3.5));
+
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-5 animate-fade-in">
-      {/* Volet Roulant IA Pro (Curtain Shutter with 6 100% Functional AI tools) */}
+    <div className="w-full max-w-7xl mx-auto space-y-5 animate-fade-in relative">
+      {/* Subtle Top Reading / Processing Progress Bar */}
+      {settings?.readingProgressBar !== false && (isLoading || isPlayingAudio) && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-slate-800/40 overflow-hidden">
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{
+              repeat: Infinity,
+              duration: isLoading ? Math.min(2.5, Math.max(0.8, estimatedReadingTimeSec * 0.3)) : 2,
+              ease: 'easeInOut',
+            }}
+            className={`h-full w-1/2 ${
+              isLoading
+                ? 'bg-gradient-to-r from-transparent via-indigo-400 to-transparent'
+                : 'bg-gradient-to-r from-transparent via-emerald-400 to-transparent'
+            } shadow-[0_0_12px_rgba(99,102,241,0.8)]`}
+          />
+        </div>
+      )}
+
+      {/* Visual Confirmation Floating Toast on Copy */}
+      <AnimatePresence>
+        {copyToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-semibold text-xs sm:text-sm shadow-2xl shadow-emerald-950 flex items-center gap-2 border border-emerald-400/40 backdrop-blur-md"
+          >
+            <CheckCircle2 className="w-4 h-4 text-white animate-bounce" />
+            <span>{copyToast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Volet Roulant IA Pro (Curtain Shutter with 11 Functional AI tools) */}
       <AIRollerShutter
         isOpen={isRollerShutterOpen}
         onToggle={() => setIsRollerShutterOpen(!isRollerShutterOpen)}
         editorText={sourceText || translatedText}
+        sourceLang={sourceLang}
+        targetLang={targetLang}
+        translatedText={translatedText}
+        buttonAnimations={btnAnim}
         onApplyToEditor={(newText) => {
           setSourceText(newText);
           performTranslation(newText, tone, sourceLang, targetLang, withPhonetics);
@@ -484,385 +585,486 @@ export const TextTranslatorView: React.FC<TextTranslatorViewProps> = ({
 
           {/* Main Dual Translation Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Source Text Card */}
-        <div className="flex flex-col theme-card rounded-2xl shadow-xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-indigo-500/40">
-          {/* Card Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b theme-card-subtle">
-            <div className="flex flex-wrap items-center gap-2">
-              <LanguageDropdown
-                idPrefix="source-lang-dropdown"
-                selectedCode={sourceLang}
-                onSelect={(code) => setSourceLang(code)}
-                onOpenFullModal={() => setIsSourceModalOpen(true)}
-                isSource={true}
-                detectedLangName={detectedLangName}
-                detectedLangCode={detectedLangCode}
-              />
+            {/* Source Text Card */}
+            <div className="flex flex-col theme-card rounded-2xl shadow-xl overflow-hidden transition-all focus-within:ring-2 focus-within:ring-indigo-500/40 relative">
+              {/* Card Header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b theme-card-subtle">
+                <div className="flex flex-wrap items-center gap-2">
+                  <LanguageDropdown
+                    idPrefix="source-lang-dropdown"
+                    selectedCode={sourceLang}
+                    onSelect={(code) => setSourceLang(code)}
+                    onOpenFullModal={() => setIsSourceModalOpen(true)}
+                    isSource={true}
+                    detectedLangName={detectedLangName}
+                    detectedLangCode={detectedLangCode}
+                  />
 
-              {/* Quick Language Switcher Pills */}
-              <div className="hidden sm:flex items-center gap-1">
-                {QUICK_SOURCE_LANGS.map((item) => {
-                  const isActive = sourceLang === item.code;
-                  return (
+                  {/* Quick Language Switcher Pills */}
+                  <div className="hidden sm:flex items-center gap-1">
+                    {QUICK_SOURCE_LANGS.map((item) => {
+                      const isActive = sourceLang === item.code;
+                      return (
+                        <button
+                          key={item.code}
+                          type="button"
+                          onClick={() => setSourceLang(item.code)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                            btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                          } ${
+                            isActive
+                              ? 'theme-accent-btn'
+                              : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <span className="text-xs select-none">{item.flag}</span>
+                          <span className="hidden md:inline">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Auto-detect Status Pill with lock button */}
+                  {sourceLang === 'auto' && detectedLangCode && (
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg theme-accent-badge text-xs animate-fade-in">
+                      <Sparkles className="w-3 h-3 shrink-0" />
+                      <span>
+                        Détecté : <strong className="font-bold">{detectedLangName || detectedLangCode}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        title="Fixer cette langue"
+                        onClick={() => setSourceLang(detectedLangCode)}
+                        className={`ml-1 text-[10px] underline hover:opacity-80 ${
+                          btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                        }`}
+                      >
+                        Fixer
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Instant language detection suggestion badge if not in auto */}
+                  {sourceLang !== 'auto' && instantDetection && instantDetection.code !== sourceLang && (
                     <button
-                      key={item.code}
                       type="button"
-                      onClick={() => setSourceLang(item.code)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
-                        isActive
-                          ? 'theme-accent-btn'
+                      onClick={() => setSourceLang(instantDetection.code)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 transition-all ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      }`}
+                      title={`Passer en ${instantDetection.name}`}
+                    >
+                      <span>{instantDetection.flag}</span>
+                      <span>Passer en {instantDetection.name} ({instantDetection.confidence}%)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick action toolbar */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  {sourceText && (
+                    <button
+                      id="btn-speak-source-text"
+                      type="button"
+                      onClick={() => handleSpeakWithBrowser(sourceText, sourceLang, true)}
+                      title={isPlayingSourceAudio ? 'Arrêter la lecture' : 'Écouter le texte source'}
+                      className={`p-2 rounded-xl transition-all ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        isPlayingSourceAudio
+                          ? 'bg-indigo-600 text-white animate-pulse'
                           : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
                       }`}
                     >
-                      <span className="text-xs select-none">{item.flag}</span>
-                      <span className="hidden md:inline">{item.label}</span>
+                      {isPlayingSourceAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
-                  );
-                })}
-              </div>
+                  )}
 
-              {/* Auto-detect Status Pill with lock button */}
-              {sourceLang === 'auto' && detectedLangCode && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg theme-accent-badge text-xs animate-fade-in">
-                  <Sparkles className="w-3 h-3 shrink-0" />
-                  <span>
-                    Détecté : <strong className="font-bold">{detectedLangName || detectedLangCode}</strong>
-                  </span>
+                  {/* Dictation mic */}
                   <button
+                    id="btn-toggle-mic-source"
                     type="button"
-                    title="Fixer cette langue"
-                    onClick={() => setSourceLang(detectedLangCode)}
-                    className="ml-1 text-[10px] underline hover:opacity-80"
+                    onClick={toggleSpeechRecognition}
+                    title={isRecording ? 'Arrêter la dictée' : 'Activer la dictée vocale'}
+                    className={`p-2 rounded-xl transition-all ${
+                      btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                    } ${
+                      isRecording
+                        ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40'
+                        : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                    }`}
                   >
-                    Fixer
+                    {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                   </button>
+
+                  {/* Clear button */}
+                  {sourceText && (
+                    <button
+                      id="btn-clear-source"
+                      type="button"
+                      onClick={handleClear}
+                      title="Effacer le texte"
+                      className={`p-2 rounded-xl theme-text-muted hover:text-red-400 hover:bg-slate-800/40 transition-all ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      }`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Fullscreen Direct Button */}
+                  {onToggleFullscreen && (
+                    <button
+                      id="btn-fullscreen-source-card"
+                      type="button"
+                      onClick={onToggleFullscreen}
+                      title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
+                      className={`p-2 rounded-xl transition-all ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        isFullscreen
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                          : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                      }`}
+                    >
+                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Quick action toolbar */}
-            <div className="flex items-center gap-1.5 ml-auto">
-              {sourceText && (
-                <button
-                  id="btn-speak-source-text"
-                  type="button"
-                  onClick={() => handleSpeakWithBrowser(sourceText, sourceLang, true)}
-                  title={isPlayingSourceAudio ? 'Arrêter la lecture' : 'Écouter le texte source'}
-                  className={`p-2 rounded-xl transition-all ${
-                    isPlayingSourceAudio
-                      ? 'bg-indigo-600 text-white animate-pulse'
-                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                  }`}
-                >
-                  {isPlayingSourceAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </button>
-              )}
-
-              {/* Dictation mic */}
-              <button
-                id="btn-toggle-mic-source"
-                type="button"
-                onClick={toggleSpeechRecognition}
-                title={isRecording ? 'Arrêter la dictée' : 'Activer la dictée vocale'}
-                className={`p-2 rounded-xl transition-all ${
-                  isRecording
-                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40'
-                    : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                }`}
-              >
-                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-
-              {/* Clear button */}
-              {sourceText && (
-                <button
-                  id="btn-clear-source"
-                  type="button"
-                  onClick={handleClear}
-                  title="Effacer le texte"
-                  className="p-2 rounded-xl theme-text-muted hover:text-red-400 hover:bg-slate-800/40 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-
-              {/* Fullscreen Direct Button */}
-              {onToggleFullscreen && (
-                <button
-                  id="btn-fullscreen-source-card"
-                  type="button"
-                  onClick={onToggleFullscreen}
-                  title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
-                  className={`p-2 rounded-xl transition-all ${
-                    isFullscreen
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                  }`}
-                >
-                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Text Area Source */}
-          <div className="flex-1 p-5 min-h-[260px] flex flex-col">
-            <textarea
-              id="textarea-source-text"
-              value={sourceText}
-              onChange={(e) => setSourceText(e.target.value)}
-              onPaste={handlePaste}
-              spellCheck={settings?.spellCheckInput !== false}
-              placeholder={t.textPlaceholder}
-              className={`w-full flex-1 bg-transparent theme-text-primary placeholder-slate-500 text-base ${lineSpacingClass} resize-none focus:outline-none font-sans`}
-              rows={8}
-            />
-
-            {/* Source Footer Stats & Shortcuts */}
-            <div className="flex flex-wrap items-center justify-between pt-4 mt-2 border-t theme-card-subtle text-xs theme-text-muted">
-              <div className="flex items-center gap-3">
-                <span className={settings?.maxCharWarning && sourceText.length > 4000 ? 'text-amber-400 font-bold flex items-center gap-1' : ''}>
-                  {settings?.maxCharWarning && sourceText.length > 4000 && <AlertTriangle className="w-3.5 h-3.5" />}
-                  {sourceText.length} caractères
-                </span>
-                <span>•</span>
-                <span>{sourceText.trim() ? sourceText.trim().split(/\s+/).length : 0} mots</span>
               </div>
 
-              {/* Sample sentences */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] theme-text-muted hidden sm:inline">Exemples :</span>
-                <select
-                  aria-label="Charger un exemple de phrase"
-                  onChange={(e) => {
-                    const idx = Number(e.target.value);
-                    if (idx >= 0 && sampleSentences[idx]) {
-                      setSourceText(sampleSentences[idx].text);
-                      setTargetLang(sampleSentences[idx].target);
-                    }
-                  }}
-                  defaultValue=""
-                  className="theme-input text-[11px] rounded-lg px-2 py-1 focus:outline-none"
-                >
-                  <option value="" disabled>
-                    Charger un exemple...
-                  </option>
-                  {sampleSentences.map((s, idx) => (
-                    <option key={idx} value={idx}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+              {/* Text Area Source */}
+              <div className="flex-1 p-5 min-h-[260px] flex flex-col">
+                <textarea
+                  id="textarea-source-text"
+                  value={sourceText}
+                  onChange={(e) => setSourceText(e.target.value)}
+                  onPaste={handlePaste}
+                  spellCheck={settings?.spellCheckInput !== false}
+                  placeholder={t.textPlaceholder}
+                  className={`w-full flex-1 bg-transparent theme-text-primary placeholder-slate-500 text-base ${lineSpacingClass} resize-none focus:outline-none font-sans`}
+                  rows={8}
+                />
+
+                {/* Source Footer Stats & Shortcuts */}
+                <div className="flex flex-wrap items-center justify-between pt-4 mt-2 border-t theme-card-subtle text-xs theme-text-muted">
+                  <div className="flex items-center gap-3">
+                    <span className={settings?.maxCharWarning && sourceText.length > 4000 ? 'text-amber-400 font-bold flex items-center gap-1' : ''}>
+                      {settings?.maxCharWarning && sourceText.length > 4000 && <AlertTriangle className="w-3.5 h-3.5" />}
+                      {sourceText.length} caractères
+                    </span>
+                    <span>•</span>
+                    <span>{wordCount} mots</span>
+                    {settings?.readingProgressBar !== false && (
+                      <>
+                        <span>•</span>
+                        <span className="hidden sm:inline">~{estimatedReadingTimeSec}s de lecture</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Sample sentences */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] theme-text-muted hidden sm:inline">Exemples :</span>
+                    <select
+                      aria-label="Charger un exemple de phrase"
+                      onChange={(e) => {
+                        const idx = Number(e.target.value);
+                        if (idx >= 0 && sampleSentences[idx]) {
+                          setSourceText(sampleSentences[idx].text);
+                          setTargetLang(sampleSentences[idx].target);
+                        }
+                      }}
+                      defaultValue=""
+                      className="theme-input text-[11px] rounded-lg px-2 py-1 focus:outline-none"
+                    >
+                      <option value="" disabled>
+                        Charger un exemple...
+                      </option>
+                      {sampleSentences.map((s, idx) => (
+                        <option key={idx} value={idx}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Target Text Card (Output) */}
+            <div className="flex flex-col theme-card rounded-2xl shadow-xl overflow-hidden transition-all relative">
+              {/* Card Header: Target Language Picker + Swap Button */}
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b theme-card-subtle">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    id="btn-swap-languages"
+                    type="button"
+                    onClick={handleSwapLanguages}
+                    title="Inverser les langues"
+                    className={`p-1.5 rounded-xl theme-card-subtle theme-text-muted hover:theme-text-primary transition-all active:rotate-180 duration-200 ${
+                      btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                    }`}
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <LanguageDropdown
+                    idPrefix="target-lang-dropdown"
+                    selectedCode={targetLang}
+                    onSelect={(code) => setTargetLang(code)}
+                    onOpenFullModal={() => setIsTargetModalOpen(true)}
+                    isSource={false}
+                  />
+
+                  {/* Quick Target Language Switcher Pills */}
+                  <div className="hidden sm:flex items-center gap-1">
+                    {QUICK_TARGET_LANGS.map((item) => {
+                      const isActive = targetLang === item.code;
+                      return (
+                        <button
+                          key={item.code}
+                          type="button"
+                          onClick={() => setTargetLang(item.code)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                            btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                          } ${
+                            isActive
+                              ? 'theme-accent-btn'
+                              : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <span className="text-xs select-none">{item.flag}</span>
+                          <span className="hidden md:inline">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Performance Latency & Status Badge & Fullscreen */}
+                <div className="flex items-center gap-2 ml-auto">
+                  {isLoading ? (
+                    <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse">
+                      <Zap className="w-3 h-3 text-indigo-400 animate-spin" />
+                      <span>{settings?.debounceDelay || 300}ms IA</span>
+                    </span>
+                  ) : latencyMs !== null ? (
+                    <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                      <Clock className="w-3 h-3 text-emerald-400" />
+                      <span>{latencyMs} ms</span>
+                    </span>
+                  ) : null}
+
+                  {onToggleFullscreen && (
+                    <button
+                      id="btn-fullscreen-target-card"
+                      type="button"
+                      onClick={onToggleFullscreen}
+                      title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        isFullscreen
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                          : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
+                      }`}
+                    >
+                      {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Text Area Target Output */}
+              <div className="flex-1 p-5 min-h-[260px] flex flex-col justify-between">
+                <div className="space-y-3">
+                  {translatedText ? (
+                    <div
+                      id="display-translated-text"
+                      className={`theme-text-primary text-base ${lineSpacingClass} font-sans select-text whitespace-pre-wrap`}
+                    >
+                      {translatedText}
+                    </div>
+                  ) : (
+                    <div className="theme-text-muted text-sm italic pt-2">
+                      La traduction contextuelle et restructurée s&apos;affiche instantanément dès votre saisie...
+                    </div>
+                  )}
+
+                  {/* Phonetic / Romanization transcript if available */}
+                  {phonetic && (
+                    <div className="p-3 rounded-xl theme-card-subtle text-xs theme-accent-badge font-mono">
+                      <span className="font-semibold mr-2">Transcription phonétique :</span>
+                      <span>{phonetic}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Target Actions Toolbar */}
+                <div className="flex flex-wrap items-center justify-between pt-4 mt-4 border-t theme-card-subtle">
+                  <div className="flex items-center gap-2">
+                    <button
+                      id="btn-play-target-audio"
+                      type="button"
+                      onClick={() => handleSpeakWithBrowser(translatedText, targetLang, false)}
+                      disabled={!translatedText}
+                      title={isPlayingAudio ? 'Arrêter la lecture' : 'Écouter la traduction'}
+                      className={`p-2 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        isPlayingAudio
+                          ? 'theme-accent-btn animate-pulse'
+                          : 'theme-card-subtle theme-text-primary hover:theme-accent-btn disabled:opacity-40'
+                      }`}
+                    >
+                      {isPlayingAudio ? (
+                        <>
+                          <VolumeX className="w-4 h-4" />
+                          <span>Lecture...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-4 h-4" />
+                          <span>Écouter</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Copy button with visual confirmation and animated toast */}
+                    <button
+                      id="btn-copy-target-text"
+                      type="button"
+                      onClick={() => handleCopy(translatedText)}
+                      disabled={!translatedText}
+                      title="Copier le texte"
+                      className={`p-2 rounded-xl theme-card-subtle disabled:opacity-40 transition-all flex items-center gap-1.5 text-xs font-medium ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        copySuccess
+                          ? 'bg-emerald-600 text-white font-bold ring-2 ring-emerald-400'
+                          : 'theme-text-muted hover:theme-text-primary'
+                      }`}
+                    >
+                      {copySuccess ? (
+                        <>
+                          <Check className="w-4 h-4 text-white" />
+                          <span className="text-white">Copié !</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span className="hidden sm:inline">Copier</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Reverse translation check */}
+                    <button
+                      id="btn-reverse-translate"
+                      type="button"
+                      onClick={handleReverseTranslation}
+                      disabled={!translatedText}
+                      title="Vérifier par traduction inverse"
+                      className={`p-2 rounded-xl theme-text-muted hover:theme-text-primary theme-card-subtle disabled:opacity-40 transition-all flex items-center gap-1.5 text-xs font-medium ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      }`}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Inverser</span>
+                    </button>
+
+                    {/* Quick Offline Lexicon Access Button */}
+                    {onOpenOfflineLexicon && (
+                      <button
+                        id="btn-open-offline-lexicon-text-view"
+                        type="button"
+                        onClick={onOpenOfflineLexicon}
+                        title="Voir tous les mots enregistrés pour le hors ligne"
+                        className={`p-2 rounded-xl theme-text-muted hover:theme-text-primary theme-card-subtle transition-all flex items-center gap-1.5 text-xs font-medium ${
+                          btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                        }`}
+                      >
+                        <Database className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="hidden md:inline">Hors ligne</span>
+                      </button>
+                    )}
+
+                    {/* Quick Photo Snapshot Button */}
+                    {onTakePhoto && (
+                      <button
+                        id="btn-take-photo-text-view"
+                        type="button"
+                        onClick={onTakePhoto}
+                        title="Prendre une photo & traduire le texte (OCR)"
+                        className={`p-2 rounded-xl text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all flex items-center gap-1.5 text-xs font-medium ${
+                          btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                        }`}
+                      >
+                        <Camera className="w-3.5 h-3.5 text-rose-400" />
+                        <span className="hidden md:inline">Photo</span>
+                      </button>
+                    )}
+
+                    {/* Quick Screenshot Button */}
+                    {onTakeScreenshot && (
+                      <button
+                        id="btn-take-screenshot-text-view"
+                        type="button"
+                        onClick={onTakeScreenshot}
+                        title="Prendre une capture d'écran"
+                        className={`p-2 rounded-xl text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 transition-all flex items-center gap-1.5 text-xs font-medium ${
+                          btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                        }`}
+                      >
+                        <Crop className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="hidden md:inline">Capture</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Toggle Phonetics */}
+                    <button
+                      id="btn-toggle-phonetics"
+                      type="button"
+                      onClick={() => setWithPhonetics(!withPhonetics)}
+                      title="Activer la transcription phonétique"
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                        btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                      } ${
+                        withPhonetics
+                          ? 'theme-accent-badge'
+                          : 'theme-card-subtle theme-text-muted hover:theme-text-primary'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Phonétique</span>
+                    </button>
+
+                    {/* Syntax Inspector Button */}
+                    {!settings?.zenFocusMode && (
+                      <button
+                        id="btn-open-syntax-inspector"
+                        type="button"
+                        onClick={handleOpenSyntaxInspector}
+                        disabled={!sourceText || !translatedText}
+                        title="Ouvrir l'inspecteur de syntaxe et grammaire"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold theme-accent-btn disabled:opacity-40 transition-all flex items-center gap-1.5 ${
+                          btnAnim ? 'hover:scale-105 active:scale-95' : ''
+                        }`}
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Inspecteur Syntaxique</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Target Text Card (Output) */}
-        <div className="flex flex-col theme-card rounded-2xl shadow-xl overflow-hidden transition-all">
-          {/* Card Header: Target Language Picker + Swap Button */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b theme-card-subtle">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                id="btn-swap-languages"
-                type="button"
-                onClick={handleSwapLanguages}
-                title="Inverser les langues"
-                className="p-1.5 rounded-xl theme-card-subtle theme-text-muted hover:theme-text-primary transition-all active:rotate-180 duration-200"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5" />
-              </button>
-
-              <LanguageDropdown
-                idPrefix="target-lang-dropdown"
-                selectedCode={targetLang}
-                onSelect={(code) => setTargetLang(code)}
-                onOpenFullModal={() => setIsTargetModalOpen(true)}
-                isSource={false}
-              />
-
-              {/* Quick Target Language Switcher Pills */}
-              <div className="hidden sm:flex items-center gap-1">
-                {QUICK_TARGET_LANGS.map((item) => {
-                  const isActive = targetLang === item.code;
-                  return (
-                    <button
-                      key={item.code}
-                      type="button"
-                      onClick={() => setTargetLang(item.code)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
-                        isActive
-                          ? 'theme-accent-btn'
-                          : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                      }`}
-                    >
-                      <span className="text-xs select-none">{item.flag}</span>
-                      <span className="hidden md:inline">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Performance Latency & Status Badge & Fullscreen */}
-            <div className="flex items-center gap-2 ml-auto">
-              {isLoading ? (
-                <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse">
-                  <Zap className="w-3 h-3 text-indigo-400 animate-spin" />
-                  <span>{settings?.debounceDelay || 300}ms IA</span>
-                </span>
-              ) : latencyMs !== null ? (
-                <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                  <Clock className="w-3 h-3 text-emerald-400" />
-                  <span>{latencyMs} ms</span>
-                </span>
-              ) : null}
-
-              {onToggleFullscreen && (
-                <button
-                  id="btn-fullscreen-target-card"
-                  type="button"
-                  onClick={onToggleFullscreen}
-                  title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre en plein écran seul (F11)"}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    isFullscreen
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : 'theme-text-muted hover:theme-text-primary hover:bg-slate-800/40'
-                  }`}
-                >
-                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Text Area Target Output */}
-          <div className="flex-1 p-5 min-h-[260px] flex flex-col justify-between">
-            <div className="space-y-3">
-              {translatedText ? (
-                <div
-                  id="display-translated-text"
-                  className={`theme-text-primary text-base ${lineSpacingClass} font-sans select-text whitespace-pre-wrap`}
-                >
-                  {translatedText}
-                </div>
-              ) : (
-                <div className="theme-text-muted text-sm italic pt-2">
-                  La traduction contextuelle et restructurée s&apos;affiche instantanément dès votre saisie...
-                </div>
-              )}
-
-              {/* Phonetic / Romanization transcript if available */}
-              {phonetic && (
-                <div className="p-3 rounded-xl theme-card-subtle text-xs theme-accent-badge font-mono">
-                  <span className="font-semibold mr-2">Transcription phonétique :</span>
-                  <span>{phonetic}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Target Actions Toolbar */}
-            <div className="flex flex-wrap items-center justify-between pt-4 mt-4 border-t theme-card-subtle">
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-play-target-audio"
-                  type="button"
-                  onClick={() => handleSpeakWithBrowser(translatedText, targetLang, false)}
-                  disabled={!translatedText}
-                  title={isPlayingAudio ? 'Arrêter la lecture' : 'Écouter la traduction'}
-                  className={`p-2 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
-                    isPlayingAudio
-                      ? 'theme-accent-btn animate-pulse'
-                      : 'theme-card-subtle theme-text-primary hover:theme-accent-btn disabled:opacity-40'
-                  }`}
-                >
-                  {isPlayingAudio ? (
-                    <>
-                      <VolumeX className="w-4 h-4" />
-                      <span>Lecture...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="w-4 h-4" />
-                      <span>Écouter</span>
-                    </>
-                  )}
-                </button>
-
-                {/* Copy button */}
-                <button
-                  id="btn-copy-target-text"
-                  type="button"
-                  onClick={() => handleCopy(translatedText)}
-                  disabled={!translatedText}
-                  title="Copier le texte"
-                  className="p-2 rounded-xl theme-text-muted hover:theme-text-primary theme-card-subtle disabled:opacity-40 transition-all flex items-center gap-1.5 text-xs font-medium"
-                >
-                  {copySuccess ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-400">Copié !</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      <span className="hidden sm:inline">Copier</span>
-                    </>
-                  )}
-                </button>
-
-                {/* Reverse translation check */}
-                <button
-                  id="btn-reverse-translate"
-                  type="button"
-                  onClick={handleReverseTranslation}
-                  disabled={!translatedText}
-                  title="Vérifier par traduction inverse"
-                  className="p-2 rounded-xl theme-text-muted hover:theme-text-primary theme-card-subtle disabled:opacity-40 transition-all flex items-center gap-1.5 text-xs font-medium"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Inverser</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Toggle Phonetics */}
-                <button
-                  id="btn-toggle-phonetics"
-                  type="button"
-                  onClick={() => setWithPhonetics(!withPhonetics)}
-                  title="Activer la transcription phonétique"
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 ${
-                    withPhonetics
-                      ? 'theme-accent-badge'
-                      : 'theme-card-subtle theme-text-muted hover:theme-text-primary'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Phonétique</span>
-                </button>
-
-                {/* Syntax Inspector Button */}
-                {!settings?.zenFocusMode && (
-                  <button
-                    id="btn-open-syntax-inspector"
-                    type="button"
-                    onClick={handleOpenSyntaxInspector}
-                    disabled={!sourceText || !translatedText}
-                    title="Ouvrir l'inspecteur de syntaxe et grammaire"
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold theme-accent-btn disabled:opacity-40 transition-all flex items-center gap-1.5"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Inspecteur Syntaxique</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )}
+      )}
 
       {/* Modals */}
       <LanguageSelectorModal

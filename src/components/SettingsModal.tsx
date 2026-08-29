@@ -1174,6 +1174,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-5 h-5 rounded accent-indigo-500 cursor-pointer"
                     />
                   </div>
+
+                  {/* Option 47: Button Animations Toggle */}
+                  <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-white">Animations & Micro-interactions Boutons</div>
+                      <div className="text-[11px] text-slate-400">Effets d'échelle, de rebond et de survol interactifs</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.buttonAnimations !== false}
+                      onChange={(e) => updateSetting('buttonAnimations', e.target.checked)}
+                      className="w-5 h-5 rounded accent-indigo-500 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Option 48: Reading Progress Bar */}
+                  <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-white">Barre de Progression de Lecture Subtile</div>
+                      <div className="text-[11px] text-slate-400">Indicateur lumineux en haut d'écran en cours de traitement</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.readingProgressBar !== false}
+                      onChange={(e) => updateSetting('readingProgressBar', e.target.checked)}
+                      className="w-5 h-5 rounded accent-indigo-500 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Option 49: Instant Language Detection */}
+                  <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between sm:col-span-2">
+                    <div>
+                      <div className="text-xs font-bold text-white">Détection Automatique Instantanée de la Langue</div>
+                      <div className="text-[11px] text-slate-400">Analyse le texte saisi en temps réel avant la traduction</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.instantLanguageDetection !== false}
+                      onChange={(e) => updateSetting('instantLanguageDetection', e.target.checked)}
+                      className="w-5 h-5 rounded accent-indigo-500 cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
             )}

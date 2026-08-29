@@ -80,6 +80,34 @@ export interface HistoryItem {
   mode: 'text' | 'ocr' | 'live_camera' | 'voice';
 }
 
+// === MEMOIRE & LEXIQUE HORS LIGNE ===
+export interface OfflineLexiconEntry {
+  id: string;
+  sourceText: string;
+  sourceNormalized: string;
+  translatedText: string;
+  sourceLang: string;
+  targetLang: string;
+  phonetic?: string;
+  timestamp: number;
+  usageCount: number;
+  isCustom?: boolean;
+  isStarred?: boolean;
+  category?: string;
+  tags?: string[];
+}
+
+export interface OfflinePack {
+  id: string;
+  name: string;
+  description: string;
+  sourceLang: string;
+  targetLang: string;
+  entriesCount: number;
+  category: 'essentials' | 'travel' | 'business' | 'tech' | 'emergency';
+  entries: { source: string; target: string; phonetic?: string; category?: string }[];
+}
+
 // === NOUVELLES OPTIONS VOLET ROULANT IA PRO ===
 
 export type AIToolId =
@@ -88,7 +116,12 @@ export type AIToolId =
   | 'plagiarism'
   | 'summarizer'
   | 'paraphraser'
-  | 'grammar';
+  | 'grammar'
+  | 'keywords'
+  | 'titlegen'
+  | 'simplifier'
+  | 'emotional_tone'
+  | 'export_pro';
 
 export interface AIDetectionResponse {
   aiScore: number; // 0-100%
@@ -165,4 +198,38 @@ export interface AIGrammarResponse {
   issues: AIGrammarIssue[];
   score: number; // 0-100
   summary: string;
+}
+
+export interface AIKeywordsResponse {
+  keywords: { word: string; category: string; importance: number }[];
+  entities: { name: string; type: string }[];
+  mainTopic: string;
+  readingEstimateSeconds: number;
+}
+
+export interface AITitleGenResponse {
+  titles: { title: string; style: string; clickScore: number }[];
+  hooks: string[];
+  punchline: string;
+}
+
+export interface AISimplifierResponse {
+  simplifiedText: string;
+  readingLevel: string;
+  metaphorsUsed: string[];
+  keyConceptsExplained: { concept: string; easyExplanation: string }[];
+}
+
+export interface AIEssentialToneResponse {
+  adaptedText: string;
+  toneApplied: string;
+  stylisticAdjustments: string[];
+  impactSummary: string;
+}
+
+export interface AIExportFormatResponse {
+  markdown: string;
+  plainText: string;
+  bilingualInterlinear: string;
+  jsonFormatted: string;
 }

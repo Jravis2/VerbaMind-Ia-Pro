@@ -13,6 +13,10 @@ import { HistoryModal } from './components/HistoryModal';
 import { GitHubDeployGuideModal } from './components/GitHubDeployGuideModal';
 import { SettingsModal } from './components/SettingsModal';
 import { OfflineBanner } from './components/OfflineBanner';
+import { OfflineLexiconModal } from './components/OfflineLexiconModal';
+import { ScreenshotModal } from './components/ScreenshotModal';
+import { PhotoCaptureModal } from './components/PhotoCaptureModal';
+import { captureElementAsDataUrl } from './utils/screenshotService';
 import { useNetworkStatus } from './utils/useNetworkStatus';
 import { useAutoViewport } from './utils/useAutoViewport';
 import { HistoryItem, ToneStyle } from './types';
@@ -20,7 +24,10 @@ import {
   AppSettings,
   loadStoredSettings,
   applyThemeToDOM,
+  triggerHapticFeedback,
+  playUiChime,
 } from './utils/appSettings';
+import { getOfflineLexicon } from './services/offlineStorageService';
 import { I18N_TRANSLATIONS } from './data/i18n';
 import { Sparkles, Cpu, Zap, Globe } from 'lucide-react';
 
@@ -32,8 +39,29 @@ export default function App() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isGitHubGuideOpen, setIsGitHubGuideOpen] = useState(false);
+  const [isOfflineLexiconOpen, setIsOfflineLexiconOpen] = useState(false);
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [offlineWordsCount, setOfflineWordsCount] = useState<number>(0);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings());
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Load offline words count & listen to real-time additions
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const list = getOfflineLexicon();
+        setOfflineWordsCount(list.length);
+      } catch (e) {
+        // Ignore
+      }
+    };
+    updateCount();
+
+    window.addEventListener('verbamind-offline-lexicon-updated', updateCount);
+    return () => window.removeEventListener('verbamind-offline-lexicon-updated', updateCount);
+  }, []);
 
   // Automatic screen size & viewport monitor
   const viewport = useAutoViewport();
@@ -54,6 +82,11 @@ export default function App() {
       if (e.key === 'F11') {
         e.preventDefault();
         handleToggleFullscreen();
+      }
+      // Ctrl+Shift+T or Cmd+Shift+T to open text translator view immediately
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault();
+        setCurrentMode('text');
       }
     };
 
@@ -198,10 +231,36 @@ export default function App() {
     applyThemeToDOM(newSettings);
   };
 
+  // Screenshot capture handler
+  const handleTakeScreenshot = async () => {
+    try {
+      if (settings.hapticFeedback) triggerHapticFeedback(25);
+      playUiChime('click');
+      const dataUrl = await captureElementAsDataUrl('root');
+      setScreenshotDataUrl(dataUrl);
+      setIsScreenshotModalOpen(true);
+    } catch (e) {
+      console.error('Failed to take screenshot:', e);
+    }
+  };
+
+  // Photo studio capture handler
+  const handleTakePhoto = () => {
+    if (settings.hapticFeedback) triggerHapticFeedback(20);
+    playUiChime('click');
+    setIsPhotoModalOpen(true);
+  };
+
+  // Send screenshot to OCR / photo analyzer
+  const handleScreenshotSendToOcr = (imageDataUrl: string) => {
+    setIsScreenshotModalOpen(false);
+    setIsPhotoModalOpen(true);
+  };
+
   const t = I18N_TRANSLATIONS[settings.appLanguage] || I18N_TRANSLATIONS.fr;
 
   return (
-    <div className="min-h-screen text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden transition-colors duration-300">
+    <div id="root-app-container" className="min-h-screen text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden transition-colors duration-300">
       {/* Ambient background glow effects */}
       {settings.backgroundParticles && (
         <div className="fixed inset-0 pointer-events-none z-0">
@@ -217,7 +276,11 @@ export default function App() {
         onChangeMode={(mode) => setCurrentMode(mode)}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenOfflineLexicon={() => setIsOfflineLexiconOpen(true)}
+        onTakeScreenshot={handleTakeScreenshot}
+        onTakePhoto={handleTakePhoto}
         historyCount={history.length}
+        offlineWordsCount={offlineWordsCount}
         isOnline={isOnline}
         onCheckConnection={checkConnection}
         appLanguage={settings.appLanguage}
@@ -232,6 +295,7 @@ export default function App() {
         onDismissToast={dismissReconnectedToast}
         onCheckConnection={checkConnection}
         onOpenHistory={() => setIsHistoryModalOpen(true)}
+        onOpenOfflineLexicon={() => setIsOfflineLexiconOpen(true)}
       />
 
       {/* Main View Area */}
@@ -245,6 +309,9 @@ export default function App() {
             settings={settings}
             isFullscreen={isFullscreen}
             onToggleFullscreen={handleToggleFullscreen}
+            onOpenOfflineLexicon={() => setIsOfflineLexiconOpen(true)}
+            onTakePhoto={handleTakePhoto}
+            onTakeScreenshot={handleTakeScreenshot}
           />
         )}
 
@@ -333,6 +400,31 @@ export default function App() {
       <GitHubDeployGuideModal
         isOpen={isGitHubGuideOpen}
         onClose={() => setIsGitHubGuideOpen(false)}
+      />
+
+      {/* Offline Lexicon & Saved Words Modal */}
+      <OfflineLexiconModal
+        isOpen={isOfflineLexiconOpen}
+        onClose={() => setIsOfflineLexiconOpen(false)}
+        isOnline={isOnline}
+      />
+
+      {/* Screenshot Preview & Export Modal */}
+      <ScreenshotModal
+        isOpen={isScreenshotModalOpen}
+        onClose={() => setIsScreenshotModalOpen(false)}
+        screenshotUrl={screenshotDataUrl}
+        onRetake={handleTakeScreenshot}
+        onSendToOcr={handleScreenshotSendToOcr}
+      />
+
+      {/* Photo Capture & OCR Translation Studio Modal */}
+      <PhotoCaptureModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        onSaveHistory={handleSaveHistory}
+        isOnline={isOnline}
+        settings={settings}
       />
     </div>
   );

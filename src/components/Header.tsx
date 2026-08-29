@@ -5,6 +5,9 @@ import {
   Settings,
   Maximize2,
   Minimize2,
+  Database,
+  Camera,
+  Crop,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
 import { I18N_TRANSLATIONS, UILanguage } from '../data/i18n';
@@ -16,7 +19,11 @@ interface HeaderProps {
   onChangeMode?: (mode: AppMode) => void;
   onOpenHistory: () => void;
   onOpenSettings: () => void;
+  onOpenOfflineLexicon?: () => void;
+  onTakeScreenshot?: () => void;
+  onTakePhoto?: () => void;
   historyCount: number;
+  offlineWordsCount?: number;
   isOnline: boolean;
   onCheckConnection?: () => Promise<boolean>;
   appLanguage?: UILanguage;
@@ -27,7 +34,11 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onOpenHistory,
   onOpenSettings,
+  onOpenOfflineLexicon,
+  onTakeScreenshot,
+  onTakePhoto,
   historyCount,
+  offlineWordsCount = 0,
   isOnline,
   onCheckConnection,
   appLanguage = 'fr',
@@ -52,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
 
-            <div className="truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
+            <div className="truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none">
               <div className="flex items-center gap-1.5">
                 <h1 className="text-base sm:text-lg font-black theme-text-primary tracking-tight truncate">
                   {t.appName}
@@ -68,12 +79,56 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Action Widgets */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Take Photo Button */}
+            {onTakePhoto && (
+              <button
+                id="btn-header-take-photo"
+                onClick={onTakePhoto}
+                title="Prendre une photo avec l'appareil photo / caméra"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-indigo-500/15 border border-rose-500/30 hover:border-rose-500/60 text-rose-300 hover:text-white text-xs font-bold transition-all shadow-md group hover:scale-105 active:scale-95"
+              >
+                <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="hidden sm:inline">Prendre photo</span>
+              </button>
+            )}
+
+            {/* Take Screenshot Button */}
+            {onTakeScreenshot && (
+              <button
+                id="btn-header-take-screenshot"
+                onClick={onTakeScreenshot}
+                title="Prendre une capture d'écran de l'application"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500/15 via-cyan-500/10 to-indigo-500/15 border border-cyan-500/30 hover:border-cyan-500/60 text-cyan-300 hover:text-white text-xs font-bold transition-all shadow-md group hover:scale-105 active:scale-95"
+              >
+                <Crop className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="hidden sm:inline">Capture écran</span>
+              </button>
+            )}
+
             {/* Network Online / Offline Status Badge */}
             <NetworkStatusBadge
               isOnline={isOnline}
               onRefreshCheck={onCheckConnection}
             />
+
+            {/* Offline Lexicon Memory Button */}
+            {onOpenOfflineLexicon && (
+              <button
+                id="btn-open-offline-lexicon"
+                onClick={onOpenOfflineLexicon}
+                title="Dictionnaire & Mémoire Hors Ligne (Tous les mots enregistrés)"
+                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-bold transition-all shadow-md hover:border-cyan-500/50 hover:bg-cyan-500/10 group"
+              >
+                <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="hidden xl:inline">Mémoire Hors Ligne</span>
+                {offlineWordsCount > 0 && (
+                  <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-600/80 text-white font-bold">
+                    {offlineWordsCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Direct Fullscreen Toggle Button */}
             {onToggleFullscreen && (
@@ -81,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-toggle-fullscreen"
                 onClick={onToggleFullscreen}
                 title={isFullscreen ? "Quitter le plein écran (Échap / F11)" : "Mettre directement en plein écran (F11)"}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl theme-card border text-xs font-bold transition-all shadow-md group ${
+                className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl theme-card border text-xs font-bold transition-all shadow-md group ${
                   isFullscreen
                     ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
                     : 'theme-text-primary hover:border-indigo-500/50 hover:bg-indigo-500/10'
@@ -92,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
                 )}
-                <span className="hidden sm:inline">
+                <span className="hidden 2xl:inline">
                   {isFullscreen ? "Fenêtré" : "Plein Écran"}
                 </span>
               </button>
@@ -103,13 +158,10 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-open-settings-modal"
               onClick={onOpenSettings}
               title={t.settings}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-bold transition-all shadow-md group"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-bold transition-all shadow-md group"
             >
               <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:rotate-45 transition-transform duration-300 shrink-0" />
-              <span className="hidden sm:inline">{t.settings}</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
-                50+
-              </span>
+              <span className="hidden md:inline">{t.settings}</span>
             </button>
 
             {/* History Toggle Button */}
@@ -120,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl theme-card border theme-text-primary text-xs font-semibold transition-all shadow-sm"
             >
               <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
-              <span className="hidden md:inline">{t.history}</span>
+              <span className="hidden lg:inline">{t.history}</span>
               {historyCount > 0 && (
                 <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-bold">
                   {historyCount}
@@ -133,3 +185,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

@@ -3,6 +3,7 @@ import { getClientGemini } from './clientGemini';
 import { ToneStyle, TranslationResponse, SyntaxAnalysisResponse, OcrTranslationResponse } from '../types';
 import { LANGUAGES_DATABASE } from '../data/languages';
 import { fetchWithExponentialBackoff } from '../utils/audio';
+import { saveToOfflineLexicon, translateOffline } from './offlineStorageService';
 
 // Built-in offline quick translation lexicon & phrase dictionary for instant fallback
 const COMMON_DICTIONARY: Record<string, Record<string, string>> = {
@@ -121,9 +122,17 @@ export async function executeTranslation({
     if (res && res.ok) {
       const data = await res.json();
       if (data && typeof data.translatedText === 'string') {
+        const detectedSrc = data.detectedSourceLang || (sourceLang === 'auto' ? 'fr' : sourceLang);
+        // Automatically record all translated words/sentences to local offline database
+        try {
+          saveToOfflineLexicon(cleanText, data.translatedText, detectedSrc, targetLang, data.phonetic);
+        } catch (e) {
+          // Non-blocking
+        }
+
         return {
           translatedText: data.translatedText,
-          detectedSourceLang: data.detectedSourceLang || (sourceLang === 'auto' ? 'fr' : sourceLang),
+          detectedSourceLang: detectedSrc,
           detectedSourceLangName: data.detectedSourceLangName,
           phonetic: data.phonetic || '',
           detectedGrammarIssues: data.detectedGrammarIssues || [],
@@ -199,9 +208,21 @@ Source Text:
 
       if (response && response.text) {
         const parsed = JSON.parse(response.text);
+        const detectedSrc = parsed.detectedSourceLang || sourceLang;
+        const transText = parsed.translatedText || '';
+
+        // Auto-save word to offline dictionary
+        if (transText) {
+          try {
+            saveToOfflineLexicon(cleanText, transText, detectedSrc, targetLang, parsed.phonetic);
+          } catch (e) {
+            // Ignore
+          }
+        }
+
         return {
-          translatedText: parsed.translatedText || '',
-          detectedSourceLang: parsed.detectedSourceLang || sourceLang,
+          translatedText: transText,
+          detectedSourceLang: detectedSrc,
           detectedSourceLangName: parsed.detectedSourceLangName,
           phonetic: parsed.phonetic || '',
           detectedGrammarIssues: parsed.detectedGrammarIssues || [],
@@ -233,6 +254,13 @@ Source Text:
         // Detect language match
         const detected = data?.matches?.[0]?.['created-by'] ? sourceLang : (sourceLang === 'auto' ? 'fr' : sourceLang);
 
+        // Auto-save word to offline database
+        try {
+          saveToOfflineLexicon(cleanText, translated, detected, targetLang, phonetic);
+        } catch (e) {
+          // Ignore
+        }
+
         return {
           translatedText: translated,
           detectedSourceLang: detected,
@@ -247,7 +275,25 @@ Source Text:
     console.warn('Public translation fetch failed, using offline dictionary:', publicErr);
   }
 
-  // Tier 4: Built-in Dictionary / Rule-based Fallback
+  // Tier 4: Comprehensive Local Offline Lexicon & Smart Tokenized Translation
+  const offlineResult = translateOffline(cleanText, sourceLang, targetLang);
+  if (offlineResult.translatedText && offlineResult.matchType !== 'none') {
+    return {
+      translatedText: offlineResult.translatedText,
+      detectedSourceLang: offlineResult.sourceLangFound || (sourceLang === 'auto' ? 'fr' : sourceLang),
+      phonetic: offlineResult.phonetic || (withPhonetic ? generateClientPhonetic(offlineResult.translatedText, targetLang) : ''),
+      detectedGrammarIssues: [
+        offlineResult.matchType === 'exact'
+          ? '⚡ Traduction exacte depuis la mémoire hors ligne.'
+          : offlineResult.matchType === 'normalized'
+          ? '⚡ Correspondance lexicale hors ligne.'
+          : `⚡ Traduction mot à mot hors ligne (${offlineResult.matchedWordsCount}/${offlineResult.totalWordsCount} mots reconnus).`,
+      ],
+      latencyMs: Date.now() - startTime,
+    };
+  }
+
+  // Tier 5: Built-in Dictionary / Fallback
   const lowerKey = cleanText.toLowerCase();
   const dictMatch = COMMON_DICTIONARY[lowerKey]?.[targetLang];
 
@@ -264,7 +310,7 @@ Source Text:
   return {
     translatedText: cleanText,
     detectedSourceLang: sourceLang === 'auto' ? 'fr' : sourceLang,
-    detectedGrammarIssues: ['Mode hors-ligne local actif.'],
+    detectedGrammarIssues: ['Mode hors-ligne actif (mot non répertorié).'],
     latencyMs: Date.now() - startTime,
   };
 }
