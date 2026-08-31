@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VerbaMind AI Pro - Traduction Contextuelle, Restructuration & AR Live</title>
+    <meta name="description" content="Application Web de traduction contextuelle en temps réel, de réorganisation grammaticale et de reconnaissance visuelle AR Live Camera dans plus de 200 langues." />
+    
+    <!-- VerbaMind Favicon & App Icons -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="alternate icon" type="image/jpeg" href="./verbamind-icon.jpg" />
+    <link rel="apple-touch-icon" href="./verbamind-icon.jpg" />
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VerbaMind Pro" />
+    <meta name="application-name" content="VerbaMind AI Pro" />
+    <meta property="og:title" content="VerbaMind AI Pro - Traduction Contextuelle & AR Live" />
+    <meta property="og:description" content="Traduction contextuelle en temps réel, réorganisation grammaticale et reconnaissance visuelle AR Live Camera." />
+    <meta property="og:image" content="./verbamind-icon.jpg" />
+    <meta name="theme-color" content="#060b19" />
+
+    <!-- GitHub Pages Single Page App Redirect Script -->
+    <script>
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-JqDPrK6-.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BtBP1y11.css">
+  </head>
+  <body class="bg-[#060b19] text-slate-100 antialiased overflow-x-hidden">
+    <div id="root"></div>
+  </body>
+</html>
+

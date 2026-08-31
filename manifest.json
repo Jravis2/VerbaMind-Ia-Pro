@@ -1,0 +1,27 @@
+{
+  "name": "VerbaMind AI Pro - Traduction & AR Live",
+  "short_name": "VerbaMind Pro",
+  "description": "Traduction contextuelle instantanée, dictionnaire hors ligne, AR Live Camera et réorganisation syntaxique.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060b19",
+  "theme_color": "#060b19",
+  "categories": ["productivity", "education", "utilities"],
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./verbamind-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
