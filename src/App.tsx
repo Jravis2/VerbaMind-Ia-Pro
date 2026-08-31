@@ -28,6 +28,7 @@ import {
   playUiChime,
 } from './utils/appSettings';
 import { getOfflineLexicon } from './services/offlineStorageService';
+import { subscribeToInstallPrompt, promptPwaInstall } from './serviceWorkerRegistration';
 import { I18N_TRANSLATIONS } from './data/i18n';
 import { Sparkles, Cpu, Zap, Globe } from 'lucide-react';
 
@@ -46,6 +47,25 @@ export default function App() {
   const [offlineWordsCount, setOfflineWordsCount] = useState<number>(0);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [canInstallPwa, setCanInstallPwa] = useState(false);
+
+  // Subscribe to PWA installability prompt
+  useEffect(() => {
+    const unsubscribe = subscribeToInstallPrompt((canInstall) => {
+      setCanInstallPwa(canInstall);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Handle PWA installation
+  const handleInstallPwa = async () => {
+    if (settings.hapticFeedback) triggerHapticFeedback(20);
+    playUiChime('click');
+    const accepted = await promptPwaInstall();
+    if (accepted) {
+      playUiChime('success');
+    }
+  };
 
   // Load offline words count & listen to real-time additions
   useEffect(() => {
@@ -279,6 +299,8 @@ export default function App() {
         onOpenOfflineLexicon={() => setIsOfflineLexiconOpen(true)}
         onTakeScreenshot={handleTakeScreenshot}
         onTakePhoto={handleTakePhoto}
+        canInstallPwa={canInstallPwa}
+        onInstallPwa={handleInstallPwa}
         historyCount={history.length}
         offlineWordsCount={offlineWordsCount}
         isOnline={isOnline}

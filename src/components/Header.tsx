@@ -8,6 +8,7 @@ import {
   Database,
   Camera,
   Crop,
+  DownloadCloud,
 } from 'lucide-react';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
 import { I18N_TRANSLATIONS, UILanguage } from '../data/i18n';
@@ -22,6 +23,8 @@ interface HeaderProps {
   onOpenOfflineLexicon?: () => void;
   onTakeScreenshot?: () => void;
   onTakePhoto?: () => void;
+  onInstallPwa?: () => void;
+  canInstallPwa?: boolean;
   historyCount: number;
   offlineWordsCount?: number;
   isOnline: boolean;
@@ -37,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOfflineLexicon,
   onTakeScreenshot,
   onTakePhoto,
+  onInstallPwa,
+  canInstallPwa = false,
   historyCount,
   offlineWordsCount = 0,
   isOnline,
@@ -103,6 +108,19 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Crop className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
                 <span className="hidden sm:inline">Capture écran</span>
+              </button>
+            )}
+
+            {/* PWA Install Button (if available) */}
+            {canInstallPwa && onInstallPwa && (
+              <button
+                id="btn-install-pwa"
+                onClick={onInstallPwa}
+                title="Installer l'application sur votre appareil pour un accès 100% hors-ligne instantané"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-indigo-500/20 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-md group hover:scale-105 active:scale-95 animate-pulse"
+              >
+                <DownloadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 group-hover:scale-110 transition-transform shrink-0" />
+                <span className="hidden sm:inline">Installer l'app</span>
               </button>
             )}
 
